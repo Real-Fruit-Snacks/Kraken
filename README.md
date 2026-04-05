@@ -12,9 +12,11 @@
 
 **OPSEC-first C2 framework built in Rust.**
 
-Research-grade command and control with X25519 key exchange, AES-256-GCM encryption, modular implant architecture, mesh networking, and a ratatui TUI. Nine-crate Cargo workspace with explicit API boundaries.
+Research-grade command and control with X25519 key exchange, AES-256-GCM encryption, modular implant architecture, mesh networking, and a CLI operator interface. Nine-crate Cargo workspace with explicit API boundaries.
 
 > **Authorization Required**: Designed exclusively for authorized security testing with explicit written permission.
+>
+> **Under Active Development**: Kraken is currently being built and is not yet operational. APIs, protocols, and features may change without notice.
 
 </div>
 
@@ -37,7 +39,7 @@ just server
 # Listening on 0.0.0.0:50051 (gRPC) and 0.0.0.0:443 (HTTPS)
 ```
 
-**Connect the operator TUI:**
+**Connect the operator CLI:**
 
 ```bash
 just operator -- --server 127.0.0.1:50051
@@ -91,9 +93,9 @@ kraken> mesh topology
 kraken> mesh route implant-3 via implant-1,implant-2
 ```
 
-### Operator TUI
+### Operator CLI
 
-Real-time ratatui interface with Catppuccin Mocha theming. Implant list, task queue, structured results, keybinding navigation.
+Command-line operator interface. Implant management, task dispatch, structured results, and session tracking.
 
 ```bash
 just operator -- --server teamserver:50051
@@ -135,12 +137,12 @@ crates/
 ├── config/        # Compile-time configuration baking
 ├── db/            # SQLite via sqlx (PostgreSQL migration path)
 ├── server/        # Teamserver: gRPC services, HTTP listeners, audit
-├── operator/      # TUI: ratatui, keybindings, real-time rendering
+├── operator/      # CLI: command interface, session management
 ├── implant-core/  # Minimal kernel: check-in, dispatch, transport chains
 └── implant-sim/   # Simulator for testing without real targets
 ```
 
-Three-tier architecture: Operator (TUI + gRPC client) connects to Teamserver (gRPC + HTTP listener + SQLite) which manages Implants (minimal core + modules). All communication encrypted end-to-end.
+Three-tier architecture: Operator (CLI + gRPC client) connects to Teamserver (gRPC + HTTP listener + SQLite) which manages Implants (minimal core + modules). All communication encrypted end-to-end.
 
 ---
 
@@ -149,7 +151,7 @@ Three-tier architecture: Operator (TUI + gRPC client) connects to Teamserver (gR
 | | Linux | Windows | macOS |
 |---|---|---|---|
 | Teamserver | Full | Full | Full |
-| Operator TUI | Full | Full | Full |
+| Operator CLI | Full | Full | Full |
 | Implant | Full | Full | Planned |
 | Cross-compile | Native | MinGW | — |
 
