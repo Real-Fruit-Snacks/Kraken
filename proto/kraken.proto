@@ -1,0 +1,2861 @@
+syntax = "proto3";
+package kraken;
+
+// ============================================================================
+// Common Types
+// ============================================================================
+
+message Uuid {
+  bytes value = 1;  // 16 bytes
+}
+
+message Timestamp {
+  int64 millis = 1;  // Unix timestamp in milliseconds
+}
+
+message ProtocolVersion {
+  uint32 major = 1;
+  uint32 minor = 2;
+  uint32 patch = 3;
+}
+
+// ============================================================================
+// System Information
+// ============================================================================
+
+message SystemInfo {
+  string hostname = 1;
+  string username = 2;
+  string domain = 3;
+  string os_name = 4;
+  string os_version = 5;
+  string os_arch = 6;
+  uint32 process_id = 7;
+  string process_name = 8;
+  string process_path = 9;
+  bool is_elevated = 10;
+  string integrity_level = 11;
+  repeated string local_ips = 12;
+}
+
+// ============================================================================
+// Registration
+// ============================================================================
+
+message ImplantRegistration {
+  bytes ephemeral_public_key = 1;  // X25519 public key (32 bytes)
+  SystemInfo system_info = 2;
+  bytes config_hash = 3;  // SHA256 of baked config
+  ProtocolVersion protocol_version = 4;
+}
+
+message RegistrationResponse {
+  Uuid implant_id = 1;
+  bytes server_public_key = 2;  // X25519 public key (32 bytes)
+  string assigned_name = 3;  // Water-themed name
+  uint32 checkin_interval = 4;  // Seconds
+  uint32 jitter_percent = 5;  // 0-100
+}
+
+// ============================================================================
+// Check-in
+// ============================================================================
+
+message CheckIn {
+  Uuid implant_id = 1;
+  Timestamp local_time = 2;
+  repeated TaskResponse task_responses = 3;
+  repeated string loaded_modules = 4;
+}
+
+message CheckInResponse {
+  repeated Task tasks = 1;
+  optional uint32 new_checkin_interval = 2;
+  optional uint32 new_jitter_percent = 3;
+  repeated ImplantCommand commands = 4;
+}
+
+message ImplantCommand {
+  oneof command {
+    SleepCommand sleep = 1;
+    ExitCommand exit = 2;
+    UpdateConfigCommand update_config = 3;
+  }
+}
+
+message SleepCommand {
+  uint32 duration_seconds = 1;
+}
+
+message ExitCommand {
+  bool clean = 1;  // Graceful exit if true
+}
+
+message UpdateConfigCommand {
+  optional uint32 checkin_interval = 1;
+  optional uint32 jitter_percent = 2;
+}
+
+// ============================================================================
+// Tasks
+// ============================================================================
+
+message Task {
+  Uuid task_id = 1;
+  string task_type = 2;  // "shell", "sleep", "exit", etc.
+  bytes task_data = 3;  // Serialized task-specific message
+  Timestamp issued_at = 4;
+  Uuid operator_id = 5;
+}
+
+message TaskResponse {
+  Uuid task_id = 1;
+  TaskStatus status = 2;
+  oneof result {
+    TaskSuccess success = 3;
+    TaskError error = 4;
+    TaskStreaming streaming = 5;
+  }
+  Timestamp completed_at = 6;
+}
+
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_QUEUED = 1;      // Waiting for implant check-in
+  TASK_STATUS_DISPATCHED = 2;  // Sent to implant, awaiting result
+  TASK_STATUS_COMPLETED = 3;   // Success
+  TASK_STATUS_FAILED = 4;      // Error
+  TASK_STATUS_CANCELLED = 5;   // Operator cancelled
+  TASK_STATUS_EXPIRED = 6;     // Implant lost or timeout
+}
+
+message TaskSuccess {
+  bytes result_data = 1;  // Serialized task-specific result
+}
+
+message TaskError {
+  int32 code = 1;
+  string message = 2;
+  optional string details = 3;
+}
+
+message TaskStreaming {
+  uint32 sequence = 1;
+  bytes chunk_data = 2;
+  bool is_final = 3;
+}
+
+// ============================================================================
+// Task Types (Phase 1)
+// ============================================================================
+
+message ShellTask {
+  string command = 1;
+  optional string shell = 2;  // Override default shell
+  optional uint32 timeout_ms = 3;
+}
+
+message ShellResult {
+  string stdout = 1;
+  string stderr = 2;
+  int32 exit_code = 3;
+  uint64 duration_ms = 4;
+}
+
+message SleepTask {
+  uint32 interval = 1;   // Check-in interval in seconds
+  uint32 jitter = 2;     // Jitter percentage (0-100)
+}
+
+message SleepResult {
+  uint32 old_interval = 1;
+  uint32 old_jitter = 2;
+  uint32 new_interval = 3;
+  uint32 new_jitter = 4;
+}
+
+// ============================================================================
+// Task Types (Phase 2 - mod-file)
+// ============================================================================
+
+message FileTask {
+  oneof operation {
+    FileList list = 1;
+    FileRead read = 2;
+    FileWrite write = 3;
+    FileDelete delete = 4;
+    FileUpload upload = 5;
+    FileDownload download = 6;
+    FileUploadChunked upload_chunked = 7;
+    FileDownloadChunked download_chunked = 8;
+  }
+}
+
+message FileList {
+  string path = 1;
+  bool recursive = 2;
+}
+
+message FileRead {
+  string path = 1;
+  optional uint64 offset = 2;
+  optional uint64 length = 3;
+}
+
+message FileWrite {
+  string path = 1;
+  bytes data = 2;
+  bool append = 3;
+}
+
+message FileDelete {
+  string path = 1;
+  bool recursive = 2;
+}
+
+message FileUpload {
+  string remote_path = 1;
+  bytes data = 2;
+}
+
+message FileDownload {
+  string remote_path = 1;
+}
+
+// Chunked file upload (for large files)
+message FileUploadChunked {
+  string transfer_id = 1;      // UUID for this transfer
+  string remote_path = 2;      // Destination path
+  uint64 total_size = 3;       // Total file size in bytes
+  uint64 chunk_index = 4;      // Current chunk number (0-based)
+  uint64 total_chunks = 5;     // Total number of chunks
+  bytes chunk_data = 6;        // This chunk's data (up to 1MB)
+  bytes checksum = 7;          // SHA256 of this chunk
+}
+
+// Chunked file download request (for large files)
+message FileDownloadChunked {
+  string transfer_id = 1;      // UUID for this transfer
+  string remote_path = 2;      // File to download
+  uint64 chunk_index = 3;      // Which chunk to send (0-based)
+  uint64 chunk_size = 4;       // Bytes per chunk (default 1MB)
+}
+
+// Chunked download response
+message FileDownloadChunkResponse {
+  string transfer_id = 1;      // Matches request
+  uint64 total_size = 2;       // Total file size
+  uint64 chunk_index = 3;      // This chunk number
+  uint64 total_chunks = 4;     // Total chunks
+  bytes chunk_data = 5;        // This chunk's data
+  bytes checksum = 6;          // SHA256 of chunk
+  bool is_final = 7;           // True if last chunk
+}
+
+// Transfer status/progress
+message FileTransferStatus {
+  string transfer_id = 1;
+  string file_path = 2;
+  uint64 total_size = 3;
+  uint64 bytes_transferred = 4;
+  uint64 chunks_completed = 5;
+  uint64 total_chunks = 6;
+  TransferState state = 7;
+  optional string error = 8;
+}
+
+enum TransferState {
+  TRANSFER_STATE_UNSPECIFIED = 0;
+  TRANSFER_STATE_INITIALIZING = 1;
+  TRANSFER_STATE_IN_PROGRESS = 2;
+  TRANSFER_STATE_PAUSED = 3;
+  TRANSFER_STATE_COMPLETED = 4;
+  TRANSFER_STATE_FAILED = 5;
+}
+
+// File operation results
+message DirectoryListing {
+  string path = 1;
+  repeated DirectoryEntry entries = 2;
+}
+
+message DirectoryEntry {
+  string name = 1;
+  bool is_dir = 2;
+  uint64 size = 3;
+  optional int64 modified = 4;  // Unix timestamp
+  optional string permissions = 5;
+}
+
+message FileContents {
+  string path = 1;
+  bytes data = 2;
+  uint64 size = 3;
+}
+
+message FileOperationResult {
+  string operation = 1;
+  string path = 2;
+  bool success = 3;
+  optional uint64 bytes_written = 4;
+}
+
+// ============================================================================
+// Task Types (Phase 2 - mod-bof)
+// ============================================================================
+
+message BofTask {
+  bytes bof_data = 1;          // COFF object file bytes
+  optional string entry_point = 2;  // Entry function name (default: "go")
+  optional bytes arguments = 3;     // Packed arguments for the BOF
+}
+
+message BofResult {
+  string output = 1;           // Captured BeaconOutput
+  int32 exit_code = 2;         // Exit code (0 = success)
+  optional string error = 3;   // Error message if failed
+}
+
+// ============================================================================
+// Task Types (Phase 7 - mod-inject)
+// ============================================================================
+
+message InjectTask {
+  uint32 target_pid = 1;       // Target process ID (0 = Early Bird creates new)
+  bytes shellcode = 2;         // Shellcode bytes to inject
+  InjectionMethod method = 3;  // Injection technique
+  bool wait = 4;               // Wait for injected thread to complete
+  uint32 timeout_ms = 5;       // Timeout in milliseconds (0 = infinite)
+  optional uint32 parent_pid = 6;  // Spoof this PID as parent (T1134.004); absent = no spoofing
+}
+
+message InjectResult {
+  bool success = 1;
+  uint32 thread_id = 2;        // Created/hijacked thread ID
+  string technique_used = 3;   // Which technique succeeded
+  optional string error = 4;   // Error message if failed
+}
+
+// ============================================================================
+// Task Types (Phase 7 - mod-token)
+// ============================================================================
+
+message TokenTask {
+  oneof operation {
+    TokenSteal steal = 1;
+    TokenMake make = 2;
+    TokenImpersonate impersonate = 3;
+    TokenRevSelf rev2self = 4;
+    TokenEnablePriv enable_priv = 5;
+    TokenList list = 6;
+  }
+}
+
+message TokenSteal {
+  uint32 target_pid = 1;       // Process to steal token from
+}
+
+message TokenMake {
+  string username = 1;
+  string password = 2;
+  optional string domain = 3;  // Defaults to "." (local)
+}
+
+message TokenImpersonate {
+  uint32 token_id = 1;         // ID from token store
+}
+
+message TokenRevSelf {}        // No parameters needed
+
+message TokenEnablePriv {
+  string privilege = 1;        // e.g., "SeDebugPrivilege"
+}
+
+message TokenList {}           // No parameters needed
+
+message TokenResult {
+  bool success = 1;
+  optional uint32 token_id = 2;    // For steal/make operations
+  optional string username = 3;    // For list operations
+  repeated StoredTokenInfo tokens = 4;  // For list operations
+  optional string error = 5;
+}
+
+message StoredTokenInfo {
+  uint32 id = 1;
+  string username = 2;
+  string source = 3;           // "steal" or "make"
+  uint32 source_pid = 4;       // If stolen, source process
+}
+
+// ============================================================================
+// Task Types (Phase 7 - mod-socks)
+// ============================================================================
+
+message SocksTask {
+  oneof operation {
+    SocksConnect connect = 1;      // Server requests implant connect to target
+    SocksData data = 2;            // Relay data through tunnel
+    SocksDisconnect disconnect = 3; // Close a channel
+  }
+}
+
+message SocksConnect {
+  uint32 channel_id = 1;       // Channel identifier for multiplexing
+  string target_host = 2;      // Target hostname or IP
+  uint32 target_port = 3;      // Target port
+}
+
+message SocksData {
+  uint32 channel_id = 1;
+  bytes data = 2;
+}
+
+message SocksDisconnect {
+  uint32 channel_id = 1;
+}
+
+message SocksResult {
+  uint32 channel_id = 1;
+  bool success = 2;
+  optional bytes data = 3;     // Response data (for connect/data)
+  optional string error = 4;
+}
+
+// ============================================================================
+// Task Types (Phase 2 - Loot Store)
+// ============================================================================
+
+enum LootType {
+  LOOT_TYPE_UNSPECIFIED = 0;
+  LOOT_TYPE_CREDENTIAL = 1;
+  LOOT_TYPE_HASH = 2;
+  LOOT_TYPE_TOKEN = 3;
+  LOOT_TYPE_FILE = 4;
+}
+
+message LootEntry {
+  Uuid id = 1;
+  Uuid implant_id = 2;
+  LootType loot_type = 3;
+  string source = 4;              // Where this loot came from (module, technique)
+  Timestamp collected_at = 5;
+  oneof data {
+    CredentialLoot credential = 10;
+    HashLoot hash = 11;
+    TokenLoot token = 12;
+    FileLoot file = 13;
+  }
+}
+
+message CredentialLoot {
+  string username = 1;
+  string password = 2;
+  optional string domain = 3;
+  optional string realm = 4;      // Kerberos realm, HTTP realm, etc.
+  optional string host = 5;       // Target host if applicable
+}
+
+message HashLoot {
+  string username = 1;
+  string hash = 2;
+  string hash_type = 3;           // NTLM, NTLMv2, Kerberos, etc.
+  optional string domain = 4;
+}
+
+message TokenLoot {
+  string token_type = 1;          // JWT, API key, session cookie, etc.
+  string token_value = 2;
+  optional string service = 3;    // What service this token is for
+  optional Timestamp expires_at = 4;
+}
+
+message FileLoot {
+  string filename = 1;
+  string original_path = 2;
+  bytes content = 3;
+  uint64 size = 4;
+  optional string description = 5;
+}
+
+// Loot service messages
+message StoreLootRequest {
+  Uuid implant_id = 1;
+  LootType loot_type = 2;
+  string source = 3;
+  oneof data {
+    CredentialLoot credential = 10;
+    HashLoot hash = 11;
+    TokenLoot token = 12;
+    FileLoot file = 13;
+  }
+}
+
+message StoreLootResponse {
+  Uuid loot_id = 1;
+}
+
+message GetLootRequest {
+  Uuid loot_id = 1;
+}
+
+message ListLootRequest {
+  optional Uuid implant_id = 1;
+  optional LootType type_filter = 2;
+  optional uint32 limit = 3;
+  optional uint32 offset = 4;
+}
+
+message ListLootResponse {
+  repeated LootEntry entries = 1;
+  uint32 total_count = 2;
+}
+
+message DeleteLootRequest {
+  Uuid loot_id = 1;
+}
+
+message DeleteLootResponse {
+  bool success = 1;
+}
+
+message ExportLootRequest {
+  optional Uuid implant_id = 1;
+  optional LootType type_filter = 2;
+  string format = 3;              // "json", "csv"
+}
+
+message ExportLootResponse {
+  bytes data = 1;
+  string filename = 2;
+}
+
+message SearchLootRequest {
+  string query = 1;   // FTS5 query string
+  int32 limit = 2;    // Maximum results to return (0 = server default of 100)
+}
+
+message SearchLootResponse {
+  repeated LootEntry entries = 1;
+  uint32 total_count = 2;
+}
+
+// ============================================================================
+// Task Types (Phase 3 - mod-module)
+// ============================================================================
+
+message ModuleTask {
+  oneof operation {
+    ModuleLoad load = 1;
+    ModuleUnload unload = 2;
+    ModuleList list = 3;
+  }
+}
+
+message ModuleLoad {
+  bytes module_blob = 1;
+}
+
+message ModuleUnload {
+  string module_id = 1;
+}
+
+message ModuleList {}
+
+message ModuleOperationResult {
+  string operation = 1;
+  string module_id = 2;
+  bool success = 3;
+  optional string message = 4;
+  repeated LoadedModuleInfo loaded_modules = 5;
+}
+
+message LoadedModuleInfo {
+  string module_id = 1;
+  string name = 2;
+  string version = 3;
+  int64 loaded_at = 4;
+  uint64 memory_size = 5;
+}
+
+// Module service messages
+message ModuleInfo {
+  string id = 1;
+  string name = 2;
+  optional string description = 3;
+  repeated PlatformVersion platforms = 4;
+}
+
+message PlatformVersion {
+  string platform = 1;
+  string version = 2;
+  uint64 size = 3;
+  int64 compiled_at = 4;
+}
+
+message ListModulesRequest {}
+message ListModulesResponse {
+  repeated ModuleInfo modules = 1;
+}
+
+message LoadModuleRequest {
+  bytes implant_id = 1;
+  string module_id = 2;
+  optional string version = 3;
+}
+
+message UnloadModuleRequest {
+  bytes implant_id = 1;
+  string module_id = 2;
+}
+
+// ============================================================================
+// Mesh Networking (Phase 5)
+// ============================================================================
+
+message MeshTask {
+  oneof operation {
+    MeshConnect connect = 1;
+    MeshDisconnect disconnect = 2;
+    MeshSetRole set_role = 3;
+    MeshGetTopology get_topology = 4;
+    MeshRelay relay = 5;
+    MeshListen listen = 6;
+    MeshSocksConnect socks_connect = 7;
+    MeshSocksData socks_data = 8;
+  }
+}
+
+message MeshConnect {
+  bytes peer_id = 1;              // Target implant ID (16 bytes)
+  MeshTransportType transport = 2;
+  string address = 3;             // IP or hostname
+  uint32 port = 4;                // TCP port (if TCP)
+  string pipe_name = 5;           // Named pipe name (if SMB)
+  bytes peer_public_key = 6;      // Optional pre-shared public key
+}
+
+message MeshDisconnect {
+  bytes peer_id = 1;
+}
+
+message MeshSetRole {
+  MeshRoleType role = 1;
+}
+
+message MeshGetTopology {}
+
+message MeshRelay {
+  bytes message = 1;  // Encrypted MeshMessage
+}
+
+message MeshListen {
+  uint32 port = 1;
+  MeshTransportType transport = 2;
+  string bind_address = 3;          // Default "0.0.0.0"
+  string pipe_name = 4;             // For SMB transport
+}
+
+// SOCKS5 proxy through mesh
+message MeshSocksConnect {
+  uint32 channel_id = 1;            // Unique ID for this SOCKS channel
+  string target_host = 2;           // Target hostname or IP
+  uint32 target_port = 3;           // Target port
+}
+
+message MeshSocksData {
+  uint32 channel_id = 1;            // Channel ID
+  bytes data = 2;                   // Payload data
+  bool eof = 3;                     // End of stream
+}
+
+message MeshSocksResponse {
+  uint32 channel_id = 1;
+  bool success = 2;
+  string error = 3;                 // Error message if failed
+  string bound_addr = 4;            // Bound address (for SOCKS response)
+  uint32 bound_port = 5;            // Bound port
+}
+
+enum MeshTransportType {
+  MESH_TRANSPORT_UNKNOWN = 0;
+  MESH_TRANSPORT_SMB = 1;
+  MESH_TRANSPORT_TCP = 2;
+}
+
+enum MeshRoleType {
+  MESH_ROLE_LEAF = 0;
+  MESH_ROLE_RELAY = 1;
+  MESH_ROLE_HUB = 2;
+}
+
+message MeshPeerReport {
+  bytes peer_id = 1;
+  MeshTransportType transport = 2;
+  MeshLinkState link_state = 3;
+  int64 last_seen = 4;
+  uint64 messages_sent = 5;
+  uint64 messages_received = 6;
+  uint32 latency_ms = 7;
+}
+
+enum MeshLinkState {
+  MESH_LINK_CONNECTING = 0;
+  MESH_LINK_HANDSHAKING = 1;
+  MESH_LINK_ACTIVE = 2;
+  MESH_LINK_DEGRADED = 3;
+  MESH_LINK_FAILED = 4;
+}
+
+message MeshTopologyUpdate {
+  bytes node_id = 1;
+  MeshEvent event = 2;
+}
+
+message MeshEvent {
+  oneof event_type {
+    MeshTopologyReport topology_report = 1;
+    MeshLinkEstablished link_established = 2;
+    MeshLinkRemoved link_removed = 3;
+    MeshLinkStateChanged link_state_changed = 4;
+  }
+}
+
+message MeshTopologyReport {
+  MeshRoleType role = 1;
+  repeated MeshPeerReport peers = 2;
+}
+
+message MeshLinkEstablished {
+  bytes peer_id = 1;
+  MeshTransportType transport = 2;
+}
+
+message MeshLinkRemoved {
+  bytes peer_id = 1;
+}
+
+message MeshLinkStateChanged {
+  bytes peer_id = 1;
+  MeshLinkState old_state = 2;
+  MeshLinkState new_state = 3;
+}
+
+message MeshRoute {
+  bytes source = 1;
+  bytes destination = 2;
+  repeated bytes hops = 3;
+  int64 computed_at = 4;
+}
+
+// ============================================================================
+// Message Envelope (for HTTP transport)
+// ============================================================================
+
+message MessageEnvelope {
+  MessageType message_type = 1;
+  bytes payload = 2;  // Encrypted or plaintext depending on state
+}
+
+enum MessageType {
+  MESSAGE_TYPE_UNSPECIFIED = 0;
+  MESSAGE_TYPE_REGISTRATION = 1;
+  MESSAGE_TYPE_CHECKIN = 2;
+  MESSAGE_TYPE_TASK_RESPONSE = 3;
+}
+
+// ============================================================================
+// Implant State
+// ============================================================================
+
+enum ImplantState {
+  IMPLANT_STATE_UNSPECIFIED = 0;
+  IMPLANT_STATE_STAGING = 1;
+  IMPLANT_STATE_ACTIVE = 2;
+  IMPLANT_STATE_LOST = 3;
+  IMPLANT_STATE_BURNED = 4;
+  IMPLANT_STATE_RETIRED = 5;
+}
+
+// ============================================================================
+// gRPC Service Messages
+// ============================================================================
+
+// Implant Service
+message Implant {
+  Uuid id = 1;
+  string name = 2;
+  ImplantState state = 3;
+  SystemInfo system_info = 4;
+  uint32 checkin_interval = 5;
+  uint32 jitter_percent = 6;
+  Timestamp registered_at = 7;
+  Timestamp last_seen = 8;
+  repeated string tags = 9;
+  string notes = 10;
+}
+
+message ListImplantsRequest {
+  optional ImplantState state_filter = 1;
+  repeated string tag_filter = 2;
+  optional string search = 3;
+}
+
+message ListImplantsResponse {
+  repeated Implant implants = 1;
+}
+
+message GetImplantRequest {
+  Uuid implant_id = 1;
+}
+
+message UpdateImplantRequest {
+  Uuid implant_id = 1;
+  optional string name = 2;
+  repeated string tags = 3;
+  optional string notes = 4;
+  optional uint32 checkin_interval = 5;
+  optional uint32 jitter_percent = 6;
+}
+
+message BurnImplantRequest {
+  Uuid implant_id = 1;
+  string reason = 2;
+}
+
+message RetireImplantRequest {
+  Uuid implant_id = 1;
+}
+
+message DeleteImplantRequest {
+  Uuid implant_id = 1;
+}
+
+message DeleteImplantResponse {
+  bool success = 1;
+}
+
+message StreamImplantEventsRequest {}
+
+message ImplantEvent {
+  Timestamp timestamp = 1;
+  oneof event {
+    ImplantRegisteredEvent registered = 2;
+    ImplantCheckedInEvent checked_in = 3;
+    ImplantLostEvent lost = 4;
+    ImplantRecoveredEvent recovered = 5;
+    ImplantBurnedEvent burned = 6;
+    ImplantRetiredEvent retired = 7;
+  }
+}
+
+message ImplantRegisteredEvent {
+  Uuid implant_id = 1;
+  string name = 2;
+  string hostname = 3;
+  string username = 4;
+  string os = 5;
+}
+
+message ImplantCheckedInEvent {
+  Uuid implant_id = 1;
+}
+
+message ImplantLostEvent {
+  Uuid implant_id = 1;
+}
+
+message ImplantRecoveredEvent {
+  Uuid implant_id = 1;
+}
+
+message ImplantBurnedEvent {
+  Uuid implant_id = 1;
+  Uuid operator_id = 2;
+  string reason = 3;
+}
+
+message ImplantRetiredEvent {
+  Uuid implant_id = 1;
+  Uuid operator_id = 2;
+}
+
+// Task Service
+message DispatchTaskRequest {
+  Uuid implant_id = 1;
+  string task_type = 2;
+  bytes task_data = 3;
+}
+
+message DispatchTaskResponse {
+  Uuid task_id = 1;
+}
+
+message GetTaskRequest {
+  Uuid task_id = 1;
+}
+
+message TaskInfo {
+  Uuid task_id = 1;
+  Uuid implant_id = 2;
+  Uuid operator_id = 3;
+  string task_type = 4;
+  TaskStatus status = 5;
+  Timestamp issued_at = 6;
+  Timestamp dispatched_at = 7;
+  Timestamp completed_at = 8;
+  bytes result_data = 9;
+  optional TaskError error = 10;
+}
+
+message ListTasksRequest {
+  optional Uuid implant_id = 1;
+  optional TaskStatus status_filter = 2;
+  optional uint32 limit = 3;
+}
+
+message ListTasksResponse {
+  repeated TaskInfo tasks = 1;
+}
+
+message CancelTaskRequest {
+  Uuid task_id = 1;
+}
+
+message StreamTaskResultsRequest {
+  optional Uuid implant_id = 1;
+}
+
+message TaskResultEvent {
+  Uuid task_id = 1;
+  Uuid implant_id = 2;
+  TaskStatus status = 3;
+  bytes result_data = 4;
+  optional TaskError error = 5;
+  Timestamp completed_at = 6;
+}
+
+message GetTransferStatusRequest {
+  string transfer_id = 1;
+}
+
+message ListActiveTransfersRequest {
+  optional Uuid implant_id = 1;
+}
+
+message ListActiveTransfersResponse {
+  repeated FileTransferStatus transfers = 1;
+}
+
+// Listener Service
+message Listener {
+  Uuid id = 1;
+  string listener_type = 2;  // "http", "https"
+  string bind_host = 3;
+  uint32 bind_port = 4;
+  string profile_id = 5;
+  bool is_running = 6;
+  Timestamp started_at = 7;
+  uint64 connections_total = 8;
+}
+
+message StartListenerRequest {
+  string listener_type = 1;  // "http", "https", "dns"
+  string bind_host = 2;
+  uint32 bind_port = 3;
+  string profile_id = 4;
+  optional string tls_cert_path = 5;
+  optional string tls_key_path = 6;
+  // DNS-specific configuration (used when listener_type = "dns")
+  optional string dns_domain = 7;  // Base domain for C2 (e.g., "c2.example.com")
+}
+
+message StopListenerRequest {
+  Uuid listener_id = 1;
+}
+
+message ListListenersRequest {}
+
+message ListListenersResponse {
+  repeated Listener listeners = 1;
+}
+
+// Operator Service
+message Operator {
+  Uuid id = 1;
+  string username = 2;
+  string role = 3;
+  Timestamp created_at = 4;
+  Timestamp last_seen = 5;
+  bool is_active = 6;
+
+  // RBAC: Restrict operator to specific sessions (empty = no restriction)
+  repeated bytes allowed_sessions = 10;
+
+  // RBAC: Restrict operator to specific listeners (empty = no restriction)
+  repeated bytes allowed_listeners = 11;
+
+  // RBAC: Scope type ("global" | "scoped")
+  string scope = 12;
+}
+
+message GetSelfRequest {}
+
+message ListOperatorsRequest {}
+
+message ListOperatorsResponse {
+  repeated Operator operators = 1;
+}
+
+message CreateOperatorRequest {
+  string username = 1;
+  string password = 2;
+  string role = 3;  // "admin", "operator", "viewer"
+}
+
+message UpdateOperatorRequest {
+  bytes operator_id = 1;
+  optional string role = 2;
+  optional bool disabled = 3;
+}
+
+message DeleteOperatorRequest {
+  bytes operator_id = 1;
+}
+
+message DeleteOperatorResponse {
+  bool success = 1;
+}
+
+// Mesh Service Messages
+message GetTopologyRequest {}
+
+message MeshTopology {
+  repeated MeshNode nodes = 1;
+  repeated MeshLink links = 2;
+}
+
+message MeshNode {
+  bytes implant_id = 1;
+  MeshRoleType role = 2;
+  bool has_egress = 3;
+}
+
+message MeshLink {
+  bytes from_id = 1;
+  bytes to_id = 2;
+  MeshTransportType transport = 3;
+  MeshLinkState state = 4;
+  uint32 latency_ms = 5;
+}
+
+message StreamTopologyRequest {}
+
+message ConnectPeerRequest {
+  bytes implant_id = 1;    // Source implant
+  bytes peer_id = 2;       // Target peer
+  MeshTransportType transport = 3;
+  string address = 4;
+  uint32 port = 5;
+  string pipe_name = 6;
+}
+
+message DisconnectPeerRequest {
+  bytes implant_id = 1;
+  bytes peer_id = 2;
+}
+
+message SetRoleRequest {
+  bytes implant_id = 1;
+  MeshRoleType role = 2;
+}
+
+message MeshListenRequest {
+  bytes implant_id = 1;
+  uint32 port = 2;
+  MeshTransportType transport = 3;
+  string bind_address = 4;          // Optional, default "0.0.0.0"
+}
+
+message ComputeRouteRequest {
+  bytes from_id = 1;
+  bytes to_id = 2;
+  uint32 max_paths = 3;  // For multi-path routing
+}
+
+message ComputeRouteResponse {
+  repeated MeshRoute routes = 1;
+}
+
+// ============================================================================
+// gRPC Services
+// ============================================================================
+
+service ImplantService {
+  rpc ListImplants(ListImplantsRequest) returns (ListImplantsResponse);
+  rpc GetImplant(GetImplantRequest) returns (Implant);
+  rpc UpdateImplant(UpdateImplantRequest) returns (Implant);
+  rpc BurnImplant(BurnImplantRequest) returns (Implant);
+  rpc RetireImplant(RetireImplantRequest) returns (Implant);
+  rpc DeleteImplant(DeleteImplantRequest) returns (DeleteImplantResponse);
+  rpc StreamImplantEvents(StreamImplantEventsRequest) returns (stream ImplantEvent);
+}
+
+service TaskService {
+  rpc DispatchTask(DispatchTaskRequest) returns (DispatchTaskResponse);
+  rpc GetTask(GetTaskRequest) returns (TaskInfo);
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  rpc CancelTask(CancelTaskRequest) returns (TaskInfo);
+  rpc StreamTaskResults(StreamTaskResultsRequest) returns (stream TaskResultEvent);
+  rpc GetTransferStatus(GetTransferStatusRequest) returns (FileTransferStatus);
+  rpc ListActiveTransfers(ListActiveTransfersRequest) returns (ListActiveTransfersResponse);
+}
+
+service ListenerService {
+  rpc StartListener(StartListenerRequest) returns (Listener);
+  rpc StopListener(StopListenerRequest) returns (Listener);
+  rpc ListListeners(ListListenersRequest) returns (ListListenersResponse);
+}
+
+service OperatorService {
+  rpc GetSelf(GetSelfRequest) returns (Operator);
+  rpc ListOperators(ListOperatorsRequest) returns (ListOperatorsResponse);
+  rpc CreateOperator(CreateOperatorRequest) returns (Operator);
+  rpc UpdateOperator(UpdateOperatorRequest) returns (Operator);
+  rpc DeleteOperator(DeleteOperatorRequest) returns (DeleteOperatorResponse);
+}
+
+service LootService {
+  rpc StoreLoot(StoreLootRequest) returns (StoreLootResponse);
+  rpc GetLoot(GetLootRequest) returns (LootEntry);
+  rpc ListLoot(ListLootRequest) returns (ListLootResponse);
+  rpc DeleteLoot(DeleteLootRequest) returns (DeleteLootResponse);
+  rpc ExportLoot(ExportLootRequest) returns (ExportLootResponse);
+  rpc SearchLoot(SearchLootRequest) returns (SearchLootResponse);
+}
+
+service ModuleService {
+  rpc ListModules(ListModulesRequest) returns (ListModulesResponse);
+  rpc LoadModule(LoadModuleRequest) returns (DispatchTaskResponse);
+  rpc UnloadModule(UnloadModuleRequest) returns (DispatchTaskResponse);
+}
+
+service MeshService {
+  // Get current mesh topology
+  rpc GetTopology(GetTopologyRequest) returns (MeshTopology);
+
+  // Stream topology updates
+  rpc StreamTopology(StreamTopologyRequest) returns (stream MeshTopologyUpdate);
+
+  // Connect implant to peer
+  rpc ConnectPeer(ConnectPeerRequest) returns (DispatchTaskResponse);
+
+  // Disconnect from peer
+  rpc DisconnectPeer(DisconnectPeerRequest) returns (DispatchTaskResponse);
+
+  // Set implant mesh role
+  rpc SetRole(SetRoleRequest) returns (DispatchTaskResponse);
+
+  // Start mesh listener on implant
+  rpc Listen(MeshListenRequest) returns (DispatchTaskResponse);
+
+  // Compute route between nodes
+  rpc ComputeRoute(ComputeRouteRequest) returns (ComputeRouteResponse);
+}
+
+// ============================================================================
+// Proxy Service (Phase 5) - SOCKS Proxy Management
+// ============================================================================
+
+enum SocksVersion {
+  SOCKS_VERSION_UNSPECIFIED = 0;
+  SOCKS_VERSION_4 = 1;
+  SOCKS_VERSION_4A = 2;
+  SOCKS_VERSION_5 = 3;
+}
+
+enum ProxyState {
+  PROXY_STATE_UNSPECIFIED = 0;
+  PROXY_STATE_STARTING = 1;
+  PROXY_STATE_ACTIVE = 2;
+  PROXY_STATE_STOPPING = 3;
+  PROXY_STATE_STOPPED = 4;
+  PROXY_STATE_ERROR = 5;
+}
+
+message SocksProxy {
+  Uuid id = 1;
+  Uuid implant_id = 2;
+  string bind_host = 3;
+  uint32 bind_port = 4;
+  SocksVersion version = 5;
+  ProxyState state = 6;
+  Timestamp started_at = 7;
+  uint64 bytes_in = 8;
+  uint64 bytes_out = 9;
+  uint32 active_connections = 10;
+  uint64 total_connections = 11;
+}
+
+message PortForward {
+  Uuid id = 1;
+  Uuid implant_id = 2;
+  string local_host = 3;
+  uint32 local_port = 4;
+  string remote_host = 5;
+  uint32 remote_port = 6;
+  bool reverse = 7;             // true = remote->local, false = local->remote
+  ProxyState state = 8;
+  Timestamp started_at = 9;
+  uint64 bytes_in = 10;
+  uint64 bytes_out = 11;
+}
+
+// Start a SOCKS proxy on an implant
+message StartProxyRequest {
+  Uuid implant_id = 1;
+  string bind_host = 2;         // Default "127.0.0.1"
+  uint32 bind_port = 3;         // Default 1080
+  SocksVersion version = 4;     // Default SOCKS5
+  optional string username = 5; // Optional SOCKS auth
+  optional string password = 6;
+  bool reverse = 7;             // Reverse mode: implant is exit node
+  uint32 connect_timeout = 8;   // Connection timeout in seconds (reverse mode)
+  bool allow_dns = 9;           // Allow DNS resolution (reverse mode, default true)
+}
+
+message StartProxyResponse {
+  Uuid proxy_id = 1;
+  Uuid task_id = 2;
+}
+
+message StopProxyRequest {
+  Uuid proxy_id = 1;
+}
+
+message StopProxyResponse {
+  bool success = 1;
+}
+
+message ListProxiesRequest {
+  optional Uuid implant_id = 1;  // Filter by implant
+  optional ProxyState state = 2; // Filter by state
+}
+
+message ListProxiesResponse {
+  repeated SocksProxy proxies = 1;
+  repeated PortForward port_forwards = 2;
+}
+
+message GetProxyStatsRequest {
+  Uuid proxy_id = 1;
+}
+
+message ProxyStats {
+  Uuid proxy_id = 1;
+  uint64 bytes_in = 2;
+  uint64 bytes_out = 3;
+  uint32 active_connections = 4;
+  uint64 total_connections = 5;
+  repeated ProxyConnection connections = 6;
+}
+
+message ProxyConnection {
+  uint32 connection_id = 1;
+  string remote_addr = 2;
+  string target_addr = 3;
+  uint64 bytes_in = 4;
+  uint64 bytes_out = 5;
+  Timestamp connected_at = 6;
+}
+
+message StreamProxyStatsRequest {
+  optional Uuid proxy_id = 1;   // Filter by proxy, or all
+  uint32 interval_ms = 2;       // Update interval (default 1000)
+}
+
+message ProxyStatsUpdate {
+  Uuid proxy_id = 1;
+  uint64 bytes_in = 2;
+  uint64 bytes_out = 3;
+  uint32 active_connections = 4;
+  Timestamp timestamp = 5;
+}
+
+// Port forwarding
+message StartPortForwardRequest {
+  Uuid implant_id = 1;
+  string local_host = 2;
+  uint32 local_port = 3;
+  string remote_host = 4;
+  uint32 remote_port = 5;
+  bool reverse = 6;
+}
+
+message StartPortForwardResponse {
+  Uuid forward_id = 1;
+  Uuid task_id = 2;
+}
+
+message StopPortForwardRequest {
+  Uuid forward_id = 1;
+}
+
+message StopPortForwardResponse {
+  bool success = 1;
+}
+
+// Reverse SOCKS proxy channel messages (implant as exit node)
+message ReverseProxyConnect {
+  uint32 channel_id = 1;        // Unique channel ID for this connection
+  string target_host = 2;       // Target hostname or IP
+  uint32 target_port = 3;       // Target port
+}
+
+message ReverseProxyConnectResult {
+  uint32 channel_id = 1;
+  bool success = 2;
+  optional string error = 3;
+  optional string bound_addr = 4;  // Local address implant bound to
+}
+
+message ReverseProxyData {
+  uint32 channel_id = 1;
+  bytes data = 2;
+  bool eof = 3;                 // End of stream marker
+}
+
+message ReverseProxyClose {
+  uint32 channel_id = 1;
+}
+
+service ProxyService {
+  // SOCKS Proxy management
+  rpc StartProxy(StartProxyRequest) returns (StartProxyResponse);
+  rpc StopProxy(StopProxyRequest) returns (StopProxyResponse);
+  rpc ListProxies(ListProxiesRequest) returns (ListProxiesResponse);
+  rpc GetProxyStats(GetProxyStatsRequest) returns (ProxyStats);
+  rpc StreamProxyStats(StreamProxyStatsRequest) returns (stream ProxyStatsUpdate);
+
+  // Port forwarding
+  rpc StartPortForward(StartPortForwardRequest) returns (StartPortForwardResponse);
+  rpc StopPortForward(StopPortForwardRequest) returns (StopPortForwardResponse);
+}
+
+// ============================================================================
+// BOF Service (Phase 5) - Beacon Object File Management
+// ============================================================================
+
+enum BOFCategory {
+  BOF_CATEGORY_UNSPECIFIED = 0;
+  BOF_CATEGORY_RECON = 1;
+  BOF_CATEGORY_CREDENTIALS = 2;
+  BOF_CATEGORY_LATERAL = 3;
+  BOF_CATEGORY_PRIVESC = 4;
+  BOF_CATEGORY_EVASION = 5;
+  BOF_CATEGORY_PERSISTENCE = 6;
+  BOF_CATEGORY_UTILITY = 7;
+}
+
+enum BOFArgType {
+  BOF_ARG_UNSPECIFIED = 0;
+  BOF_ARG_STRING = 1;      // z - null-terminated string
+  BOF_ARG_WSTRING = 2;     // Z - wide string
+  BOF_ARG_INT = 3;         // i - 32-bit integer
+  BOF_ARG_SHORT = 4;       // s - 16-bit integer
+  BOF_ARG_BINARY = 5;      // b - binary data with length prefix
+}
+
+message BOFArgument {
+  string name = 1;
+  BOFArgType arg_type = 2;
+  string description = 3;
+  bool required = 4;
+  optional string default_value = 5;
+}
+
+message BOFManifest {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string author = 4;
+  string version = 5;
+  BOFCategory category = 6;
+  repeated string tags = 7;
+  repeated BOFArgument arguments = 8;
+  string entry_point = 9;           // Default "go"
+  repeated string supported_arch = 10;  // "x64", "x86"
+  repeated string supported_os = 11;    // "windows"
+  string opsec_notes = 12;          // OPSEC considerations
+  string source_url = 13;           // Original source repo
+}
+
+message BOFCatalogEntry {
+  BOFManifest manifest = 1;
+  bool x64_available = 2;
+  bool x86_available = 3;
+  uint64 x64_size = 4;
+  uint64 x86_size = 5;
+  Timestamp added_at = 6;
+}
+
+message BOFExecution {
+  Uuid id = 1;
+  Uuid implant_id = 2;
+  string bof_id = 3;
+  repeated string arguments = 4;
+  Timestamp executed_at = 5;
+  optional string output = 6;
+  optional int32 exit_code = 7;
+  optional string error = 8;
+  bool completed = 9;
+}
+
+// List available BOFs in the catalog
+message ListBOFsRequest {
+  optional BOFCategory category = 1;
+  optional string search = 2;       // Search name/description
+  repeated string tags = 3;
+}
+
+message ListBOFsResponse {
+  repeated BOFCatalogEntry bofs = 1;
+}
+
+// Get BOF details
+message GetBOFRequest {
+  string bof_id = 1;
+}
+
+// Execute BOF on implant
+message ExecuteBOFRequest {
+  Uuid implant_id = 1;
+  string bof_id = 2;
+  repeated string arguments = 3;    // Arguments in order
+  optional string arch_override = 4; // Force x64 or x86
+}
+
+message ExecuteBOFResponse {
+  Uuid execution_id = 1;
+  Uuid task_id = 2;
+}
+
+// Validate BOF compatibility with implant
+message ValidateBOFRequest {
+  Uuid implant_id = 1;
+  string bof_id = 2;
+}
+
+message ValidateBOFResponse {
+  bool compatible = 1;
+  repeated string warnings = 2;     // OPSEC warnings
+  string recommended_arch = 3;
+}
+
+// List recent BOF executions
+message ListBOFExecutionsRequest {
+  optional Uuid implant_id = 1;
+  optional string bof_id = 2;
+  uint32 limit = 3;
+}
+
+message ListBOFExecutionsResponse {
+  repeated BOFExecution executions = 1;
+}
+
+// Upload new BOF to catalog
+message UploadBOFRequest {
+  BOFManifest manifest = 1;
+  optional bytes x64_data = 2;
+  optional bytes x86_data = 3;
+}
+
+message UploadBOFResponse {
+  string bof_id = 1;
+  bool success = 2;
+  optional string error = 3;
+}
+
+// Delete BOF from catalog
+message DeleteBOFRequest {
+  string bof_id = 1;
+}
+
+message DeleteBOFResponse {
+  bool success = 1;
+}
+
+service BOFService {
+  // Catalog management
+  rpc ListBOFs(ListBOFsRequest) returns (ListBOFsResponse);
+  rpc GetBOF(GetBOFRequest) returns (BOFCatalogEntry);
+  rpc UploadBOF(UploadBOFRequest) returns (UploadBOFResponse);
+  rpc DeleteBOF(DeleteBOFRequest) returns (DeleteBOFResponse);
+
+  // Execution
+  rpc ExecuteBOF(ExecuteBOFRequest) returns (ExecuteBOFResponse);
+  rpc ValidateBOF(ValidateBOFRequest) returns (ValidateBOFResponse);
+  rpc ListExecutions(ListBOFExecutionsRequest) returns (ListBOFExecutionsResponse);
+}
+
+// ============================================================================
+// Collaboration Service (Phase 6)
+// ============================================================================
+
+// Collaboration event types
+message CollabEvent {
+  Timestamp timestamp = 1;
+  oneof event {
+    OperatorOnlineEvent operator_online = 2;
+    OperatorOfflineEvent operator_offline = 3;
+    SessionLockedEvent session_locked = 4;
+    SessionUnlockedEvent session_unlocked = 5;
+    SessionActivityEvent session_activity = 6;
+    ChatMessageEvent chat_message = 7;
+    TaskDispatchedEvent task_dispatched = 8;
+    TaskCompletedEvent task_completed = 9;
+  }
+}
+
+message OperatorOnlineEvent {
+  Uuid operator_id = 1;
+  string username = 2;
+}
+
+message OperatorOfflineEvent {
+  Uuid operator_id = 1;
+  string username = 2;
+}
+
+message SessionLockedEvent {
+  Uuid session_id = 1;
+  Uuid operator_id = 2;
+  string username = 3;
+}
+
+message SessionUnlockedEvent {
+  Uuid session_id = 1;
+  Uuid operator_id = 2;
+  string username = 3;
+}
+
+message SessionActivityEvent {
+  Uuid session_id = 1;
+  Uuid operator_id = 2;
+  string activity = 3;
+}
+
+message ChatMessageEvent {
+  Uuid from_operator_id = 1;
+  string from_username = 2;
+  string message = 3;
+  optional Uuid session_id = 4;  // Optional context
+}
+
+message TaskDispatchedEvent {
+  Uuid task_id = 1;
+  Uuid session_id = 2;
+  Uuid operator_id = 3;
+  string task_type = 4;
+}
+
+message TaskCompletedEvent {
+  Uuid task_id = 1;
+  Uuid session_id = 2;
+  bool success = 3;
+}
+
+// Operator presence info
+message OperatorPresence {
+  Uuid operator_id = 1;
+  string username = 2;
+  Timestamp connected_at = 3;
+  Timestamp last_activity = 4;
+  optional Uuid active_session = 5;
+}
+
+// Session lock info
+message SessionLock {
+  Uuid session_id = 1;
+  Uuid operator_id = 2;
+  string username = 3;
+  Timestamp locked_at = 4;
+  optional string reason = 5;
+}
+
+// Collab service requests/responses
+message StreamCollabEventsRequest {}
+
+message GetOnlineOperatorsRequest {}
+
+message GetOnlineOperatorsResponse {
+  repeated OperatorPresence operators = 1;
+}
+
+message LockSessionRequest {
+  Uuid session_id = 1;
+  optional string reason = 2;
+}
+
+message UnlockSessionRequest {
+  Uuid session_id = 1;
+}
+
+message GetSessionLocksRequest {}
+
+message GetSessionLocksResponse {
+  repeated SessionLock locks = 1;
+}
+
+message SetActiveSessionRequest {
+  optional Uuid session_id = 1;
+}
+
+message SendChatRequest {
+  string message = 1;
+  optional Uuid session_id = 2;  // Optional context
+}
+
+message CollabStatsResponse {
+  uint32 online_operators = 1;
+  uint32 active_sessions = 2;
+  uint32 locked_sessions = 3;
+}
+
+message GetCollabStatsRequest {}
+
+message GetChatHistoryRequest {
+  optional Uuid session_id = 1;    // Filter by session, null = global chat
+  uint32 limit = 2;                // Max messages to return (default 100)
+  optional Timestamp before = 3;   // For pagination - messages before this time
+}
+
+message GetChatHistoryResponse {
+  repeated ChatMessageRecord messages = 1;
+  bool has_more = 2;
+}
+
+message ChatMessageRecord {
+  Uuid id = 1;
+  Uuid from_operator_id = 2;
+  string from_username = 3;
+  string message = 4;
+  optional Uuid session_id = 5;
+  Timestamp created_at = 6;
+}
+
+// =============================================================================
+// Process Injection (Phase 7)
+// =============================================================================
+
+enum InjectionMethod {
+  INJECTION_METHOD_UNSPECIFIED = 0;
+  INJECTION_METHOD_AUTO = 1;           // Framework selects best method
+  INJECTION_METHOD_WIN32 = 2;          // VirtualAllocEx + CreateRemoteThread
+  INJECTION_METHOD_NT_API = 3;         // NtAllocateVirtualMemory + NtCreateThreadEx
+  INJECTION_METHOD_APC = 4;            // NtQueueApcThread (requires alertable thread)
+  INJECTION_METHOD_THREAD_HIJACK = 5;  // Suspend + SetThreadContext
+  INJECTION_METHOD_EARLY_BIRD = 6;     // Create suspended process + APC before resume
+  INJECTION_METHOD_MODULE_STOMPING = 7; // Overwrite legitimate DLL .text section
+}
+
+enum ProcessIntegrity {
+  PROCESS_INTEGRITY_UNKNOWN = 0;
+  PROCESS_INTEGRITY_UNTRUSTED = 1;
+  PROCESS_INTEGRITY_LOW = 2;
+  PROCESS_INTEGRITY_MEDIUM = 3;
+  PROCESS_INTEGRITY_HIGH = 4;
+  PROCESS_INTEGRITY_SYSTEM = 5;
+  PROCESS_INTEGRITY_PROTECTED = 6;  // PPL
+}
+
+message ProcessEntry {
+  uint32 pid = 1;
+  uint32 ppid = 2;
+  string name = 3;
+  string path = 4;
+  string user = 5;
+  string arch = 6;  // "x64", "x86", "arm64"
+  ProcessIntegrity integrity = 7;
+  bool is_elevated = 8;
+  bool is_current = 9;      // Is this the implant's process?
+  bool is_injectable = 10;  // Arch matches and not protected
+  string warning = 11;      // OPSEC warning if any
+}
+
+message ListProcessesRequest {
+  Uuid implant_id = 1;
+  bool include_system = 2;
+  string name_filter = 3;
+}
+
+message ListProcessesResponse {
+  repeated ProcessEntry processes = 1;
+  string implant_arch = 2;
+}
+
+message InjectRequest {
+  Uuid implant_id = 1;
+  uint32 target_pid = 2;
+  bytes shellcode = 3;
+  InjectionMethod method = 4;
+  bool wait_for_completion = 5;
+  uint32 timeout_ms = 6;
+}
+
+message InjectResponse {
+  bool success = 1;
+  uint32 thread_id = 2;
+  string error = 3;
+  string technique_used = 4;
+}
+
+service CollabService {
+  // Stream real-time collaboration events
+  rpc StreamEvents(StreamCollabEventsRequest) returns (stream CollabEvent);
+
+  // Operator presence
+  rpc GetOnlineOperators(GetOnlineOperatorsRequest) returns (GetOnlineOperatorsResponse);
+  rpc SetActiveSession(SetActiveSessionRequest) returns (OperatorPresence);
+
+  // Session locking
+  rpc LockSession(LockSessionRequest) returns (SessionLock);
+  rpc UnlockSession(UnlockSessionRequest) returns (SessionLock);
+  rpc GetSessionLocks(GetSessionLocksRequest) returns (GetSessionLocksResponse);
+
+  // Chat
+  rpc SendChat(SendChatRequest) returns (ChatMessageEvent);
+  rpc GetChatHistory(GetChatHistoryRequest) returns (GetChatHistoryResponse);
+
+  // Stats
+  rpc GetStats(GetCollabStatsRequest) returns (CollabStatsResponse);
+}
+
+service InjectService {
+  // List processes on target for injection targeting
+  rpc ListProcesses(ListProcessesRequest) returns (ListProcessesResponse);
+
+  // Inject shellcode into target process
+  rpc Inject(InjectRequest) returns (InjectResponse);
+}
+
+// ============================================================================
+// Report Service - Engagement Report Generation
+// ============================================================================
+
+message GenerateReportRequest {
+  string title = 1;
+  string report_type = 2;   // "engagement", "ioc", "executive", "timeline", "loot"
+  string output_format = 3; // "json", "markdown", "html"
+  Timestamp start_date = 4;
+  Timestamp end_date = 5;
+  bool include_sessions = 6;
+  bool include_tasks = 7;
+  bool include_loot = 8;
+  bool include_timeline = 9;
+  bool include_iocs = 10;
+}
+
+message GenerateReportResponse {
+  ReportRecord report = 1;
+  bytes content = 2;
+}
+
+message ReportRecord {
+  bytes id = 1;
+  string title = 2;
+  string report_type = 3;
+  string output_format = 4;
+  Timestamp generated_at = 5;
+  string generated_by = 6;
+  Timestamp start_date = 7;
+  Timestamp end_date = 8;
+  uint32 session_count = 9;
+  uint32 task_count = 10;
+  uint64 size = 11;
+}
+
+message ListReportsRequest {}
+
+message ListReportsResponse {
+  repeated ReportRecord reports = 1;
+}
+
+message GetReportRequest {
+  bytes report_id = 1;
+}
+
+message DeleteReportRequest {
+  bytes report_id = 1;
+}
+
+message DeleteReportResponse {
+  bool success = 1;
+}
+
+service ReportService {
+  rpc GenerateReport(GenerateReportRequest) returns (GenerateReportResponse);
+  rpc ListReports(ListReportsRequest) returns (ListReportsResponse);
+  rpc GetReport(GetReportRequest) returns (ReportRecord);
+  rpc DeleteReport(DeleteReportRequest) returns (DeleteReportResponse);
+}
+
+// ============================================================================
+// Payload Service - Implant generation
+// ============================================================================
+
+message WorkingHours {
+  string start = 1;
+  string end = 2;
+}
+
+message GeneratePayloadRequest {
+  string name = 1;
+  string os = 2;        // "windows", "linux", "darwin"
+  string arch = 3;      // "x64", "x86"
+  string format = 4;    // "exe", "dll", "shellcode", "service", "powershell"
+  string transport = 5; // "http", "https", "dns", "tcp", "smb"
+  bytes listener_id = 6;
+  repeated string c2_endpoints = 7;
+
+  // Evasion options
+  bool obfuscation = 10;
+  bool anti_debug = 11;
+  bool anti_sandbox = 12;
+  bool sleep_mask = 13;
+
+  // Behavior options
+  uint32 jitter = 20;
+  uint32 sleep_time = 21;
+  string kill_date = 22;
+  optional WorkingHours working_hours = 23;
+}
+
+message GeneratePayloadResponse {
+  Payload payload = 1;
+  bytes content = 2;  // The actual binary content
+}
+
+message Payload {
+  bytes id = 1;
+  string name = 2;
+  string os = 3;
+  string arch = 4;
+  string format = 5;
+  string transport = 6;
+  Timestamp generated_at = 7;
+  uint64 size = 8;
+  string hash = 9;
+}
+
+message ListPayloadsRequest {}
+message ListPayloadsResponse {
+  repeated Payload payloads = 1;
+}
+
+message GetPayloadRequest {
+  bytes payload_id = 1;
+}
+
+message DeletePayloadRequest {
+  bytes payload_id = 1;
+}
+
+message DeletePayloadResponse {
+  bool success = 1;
+}
+
+service PayloadService {
+  rpc GeneratePayload(GeneratePayloadRequest) returns (GeneratePayloadResponse);
+  rpc ListPayloads(ListPayloadsRequest) returns (ListPayloadsResponse);
+  rpc GetPayload(GetPayloadRequest) returns (Payload);
+  rpc DeletePayload(DeletePayloadRequest) returns (DeletePayloadResponse);
+}
+
+// =============================================================================
+// Phase 8: Reconnaissance & Collection Modules
+// =============================================================================
+
+// --- Screenshot Module ---
+
+message ScreenshotTask {
+  optional uint32 monitor = 1;      // Monitor index (0 = primary, 0xFFFFFFFF = all)
+  optional uint32 quality = 2;      // JPEG quality 1-100 (default: 80)
+  optional string format = 3;       // "png" or "jpeg" (default: jpeg)
+  optional bool include_cursor = 4; // Include mouse cursor (default: false)
+}
+
+message ScreenshotResult {
+  bytes data = 1;                   // Encoded image data
+  uint32 width = 2;
+  uint32 height = 3;
+  string format = 4;
+  uint32 monitor_index = 5;
+  uint64 captured_at = 6;           // Unix timestamp
+}
+
+// --- Keylogger Module ---
+
+message KeylogTask {
+  oneof operation {
+    KeylogStart start = 1;
+    KeylogStop stop = 2;
+    KeylogDump dump = 3;
+  }
+}
+
+message KeylogStart {
+  optional uint32 buffer_size = 1;      // Max chars before auto-flush (default: 4096)
+  optional uint32 flush_interval_ms = 2; // Auto-flush interval (default: 60000)
+  optional bool track_window = 3;       // Include window titles (default: true)
+  optional bool track_clipboard = 4;    // Also capture clipboard changes (default: false)
+}
+
+message KeylogStop {}
+
+message KeylogDump {}
+
+message KeylogResult {
+  repeated KeylogEntry entries = 1;
+  uint64 start_time = 2;
+  uint64 end_time = 3;
+  uint32 total_keystrokes = 4;
+}
+
+message KeylogEntry {
+  string window_title = 1;
+  string process_name = 2;
+  string keystrokes = 3;
+  uint64 timestamp = 4;
+}
+
+// --- Clipboard Module ---
+
+message ClipboardTask {
+  oneof operation {
+    ClipboardGet get = 1;
+    ClipboardSet set = 2;
+    ClipboardMonitorStart monitor_start = 3;
+    ClipboardMonitorStop monitor_stop = 4;
+    ClipboardDump dump = 5;
+  }
+}
+
+message ClipboardGet {}
+
+message ClipboardSet {
+  string text = 1;
+}
+
+message ClipboardMonitorStart {
+  optional uint32 max_entries = 1;  // Max entries to buffer (default: 100)
+  optional bool dedupe = 2;         // Skip duplicate consecutive entries (default: true)
+}
+
+message ClipboardMonitorStop {}
+
+message ClipboardDump {}
+
+message ClipboardResult {
+  repeated ClipboardEntry entries = 1;
+}
+
+message ClipboardEntry {
+  string text = 1;
+  string format = 2;                // CF_TEXT, CF_UNICODETEXT, etc.
+  uint64 timestamp = 3;
+  optional string source_window = 4;
+}
+
+// --- Process Module (Enhanced) ---
+
+message ProcessTask {
+  oneof operation {
+    ProcessListAll list = 1;
+    ProcessKill kill = 2;
+    ProcessTree tree = 3;
+    ProcessModules modules = 4;
+  }
+}
+
+message ProcessListAll {
+  optional bool include_modules = 1;
+  optional bool include_threads = 2;
+  optional string name_filter = 3;      // Filter by process name (regex)
+}
+
+message ProcessKill {
+  uint32 pid = 1;
+  optional bool force = 2;              // TerminateProcess vs graceful
+}
+
+message ProcessTree {
+  optional uint32 root_pid = 1;         // Start from specific PID (0 = all)
+}
+
+message ProcessModules {
+  uint32 pid = 1;
+}
+
+message ProcessListResult {
+  repeated ProcessInfoDetailed processes = 1;
+}
+
+message ProcessInfoDetailed {
+  uint32 pid = 1;
+  uint32 ppid = 2;
+  string name = 3;
+  string path = 4;
+  string command_line = 5;
+  string user = 6;
+  string integrity = 7;                 // Low, Medium, High, System
+  uint64 start_time = 8;
+  bool is_64bit = 9;
+  uint32 session_id = 10;
+  uint64 memory_usage = 11;             // Working set in bytes
+  repeated string loaded_modules = 12;
+  repeated ThreadInfoDetailed threads = 13;
+}
+
+message ThreadInfoDetailed {
+  uint32 tid = 1;
+  uint64 start_address = 2;
+  string state = 3;                     // Running, Waiting, etc.
+  uint32 priority = 4;
+}
+
+message ProcessTreeResult {
+  repeated ProcessTreeNode nodes = 1;
+}
+
+message ProcessTreeNode {
+  ProcessInfoDetailed process = 1;
+  repeated ProcessTreeNode children = 2;
+}
+
+message ProcessModulesResult {
+  uint32 pid = 1;
+  repeated ModuleInfoDetailed modules = 2;
+}
+
+message ModuleInfoDetailed {
+  string name = 1;
+  string path = 2;
+  uint64 base_address = 3;
+  uint64 size = 4;
+  string version = 5;
+  string description = 6;
+}
+
+// --- Registry Module (Windows) ---
+
+message RegistryTask {
+  oneof operation {
+    RegQuery query = 1;
+    RegSet set = 2;
+    RegDelete delete = 3;
+    RegEnumKeys enum_keys = 4;
+    RegEnumValues enum_values = 5;
+  }
+}
+
+message RegQuery {
+  string key_path = 1;              // e.g., "HKLM\\SOFTWARE\\Microsoft"
+  optional string value_name = 2;   // Empty for default value
+}
+
+message RegSet {
+  string key_path = 1;
+  string value_name = 2;
+  bytes data = 3;
+  uint32 value_type = 4;            // REG_SZ=1, REG_DWORD=4, REG_BINARY=3, etc.
+  optional bool create_key = 5;     // Create key if not exists
+}
+
+message RegDelete {
+  string key_path = 1;
+  optional string value_name = 2;   // If empty, delete entire key
+  optional bool recursive = 3;      // Delete subkeys recursively
+}
+
+message RegEnumKeys {
+  string key_path = 1;
+  optional bool recursive = 2;
+}
+
+message RegEnumValues {
+  string key_path = 1;
+}
+
+message RegistryResult {
+  repeated RegistryEntry entries = 1;
+}
+
+message RegistryEntry {
+  string key_path = 1;
+  string value_name = 2;
+  bytes data = 3;
+  string value_type = 4;            // String representation
+}
+
+message RegEnumKeysResult {
+  repeated string subkeys = 1;
+}
+
+message RegEnumValuesResult {
+  repeated RegistryEntry values = 1;
+}
+
+// --- Service Module (Windows) ---
+
+message ServiceTask {
+  oneof operation {
+    SvcList list = 1;
+    SvcQuery query = 2;
+    SvcCreate create = 3;
+    SvcDelete delete = 4;
+    SvcStart start = 5;
+    SvcStop stop = 6;
+    SvcModify modify = 7;
+  }
+}
+
+message SvcList {
+  optional string name_filter = 1;
+  optional bool running_only = 2;
+}
+
+message SvcQuery {
+  string name = 1;
+}
+
+message SvcCreate {
+  string name = 1;
+  string display_name = 2;
+  string binary_path = 3;
+  optional string description = 4;
+  optional uint32 start_type = 5;   // 2=Auto, 3=Manual, 4=Disabled
+  optional string account = 6;      // LocalSystem, NetworkService, etc.
+}
+
+message SvcDelete {
+  string name = 1;
+}
+
+message SvcStart {
+  string name = 1;
+}
+
+message SvcStop {
+  string name = 1;
+}
+
+message SvcModify {
+  string name = 1;
+  optional string binary_path = 2;
+  optional uint32 start_type = 3;
+  optional string description = 4;
+}
+
+message ServiceListResult {
+  repeated ServiceInfoDetailed services = 1;
+}
+
+message ServiceInfoDetailed {
+  string name = 1;
+  string display_name = 2;
+  string binary_path = 3;
+  string status = 4;                // Running, Stopped, etc.
+  string start_type = 5;            // Auto, Manual, Disabled
+  string account = 6;
+  uint32 pid = 7;
+  string description = 8;
+}
+
+// --- Persistence Module ---
+
+enum PersistenceMethod {
+  PERSIST_UNKNOWN = 0;
+  PERSIST_REGISTRY_RUN = 1;
+  PERSIST_REGISTRY_RUNONCE = 2;
+  PERSIST_SCHEDULED_TASK = 3;
+  PERSIST_SERVICE = 4;
+  PERSIST_STARTUP_FOLDER = 5;
+  PERSIST_WMI_SUBSCRIPTION = 6;
+  PERSIST_LOGON_SCRIPT = 7;
+}
+
+message PersistenceTask {
+  oneof operation {
+    PersistInstall install = 1;
+    PersistRemove remove = 2;
+    PersistList list = 3;
+  }
+}
+
+message PersistInstall {
+  PersistenceMethod method = 1;
+  string name = 2;
+  string payload_path = 3;
+  optional string arguments = 4;
+  optional string trigger = 5;      // For scheduled tasks: "daily", "logon", etc.
+  optional bool user_level = 6;     // User vs system level (default: user)
+}
+
+message PersistRemove {
+  PersistenceMethod method = 1;
+  string name = 2;
+}
+
+message PersistList {}
+
+message PersistenceResult {
+  repeated PersistenceEntry entries = 1;
+}
+
+message PersistenceEntry {
+  PersistenceMethod method = 1;
+  string name = 2;
+  string location = 3;
+  string payload = 4;
+  string status = 5;
+}
+
+// --- Scan Module ---
+
+message ScanTask {
+  oneof operation {
+    PortScan port_scan = 1;
+    PingSweep ping_sweep = 2;
+    ShareEnum share_enum = 3;
+  }
+}
+
+message PortScan {
+  string target = 1;               // IP or hostname
+  repeated uint32 ports = 2;       // Specific ports
+  optional uint32 start_port = 3;  // Range start
+  optional uint32 end_port = 4;    // Range end
+  optional uint32 timeout_ms = 5;  // Per-port timeout
+  optional uint32 threads = 6;     // Concurrent scans
+}
+
+message PingSweep {
+  string subnet = 1;               // e.g., "192.168.1.0/24"
+  optional uint32 timeout_ms = 2;
+  optional uint32 threads = 3;
+}
+
+message ShareEnum {
+  string target = 1;               // Hostname or IP
+}
+
+message ScanResult {
+  oneof result {
+    PortScanResult port_result = 1;
+    PingSweepResult ping_result = 2;
+    ShareEnumResult share_result = 3;
+  }
+}
+
+message PortScanResult {
+  string target = 1;
+  repeated OpenPort open_ports = 2;
+}
+
+message OpenPort {
+  uint32 port = 1;
+  string service = 2;              // Guessed service name
+  string banner = 3;               // Optional banner grab
+}
+
+message PingSweepResult {
+  repeated string live_hosts = 1;
+  uint32 total_scanned = 2;
+}
+
+message ShareEnumResult {
+  string target = 1;
+  repeated ShareInfo shares = 2;
+}
+
+message ShareInfo {
+  string name = 1;
+  string share_type = 2;           // Disk, Printer, IPC, etc.
+  string path = 3;
+  string remark = 4;
+}
+
+// --- Environment Module ---
+
+message EnvTask {
+  oneof operation {
+    GetSystemInfo system_info = 1;
+    GetNetworkInfo network_info = 2;
+    GetEnvVars env_vars = 3;
+    WhoAmI whoami = 4;
+  }
+}
+
+message GetSystemInfo {}
+message GetNetworkInfo {}
+message GetEnvVars {}
+message WhoAmI {}
+
+message EnvResult {
+  oneof result {
+    SystemInfoResult system = 1;
+    NetworkInfoResult network = 2;
+    EnvVarsResult env_vars = 3;
+    WhoAmIResult whoami = 4;
+  }
+}
+
+message SystemInfoResult {
+  string os_name = 1;
+  string os_version = 2;
+  string architecture = 3;
+  string computer_name = 4;
+  string domain = 5;
+  uint64 uptime_seconds = 6;
+  uint64 total_memory = 7;
+  uint32 cpu_count = 8;
+}
+
+message NetworkInfoResult {
+  repeated NetworkInterface interfaces = 1;
+  repeated string dns_servers = 2;
+  string default_gateway = 3;
+}
+
+message NetworkInterface {
+  string name = 1;
+  string mac_address = 2;
+  repeated string ipv4_addresses = 3;
+  repeated string ipv6_addresses = 4;
+  bool is_up = 5;
+}
+
+message EnvVarsResult {
+  map<string, string> variables = 1;
+}
+
+message WhoAmIResult {
+  string username = 1;
+  string domain = 2;
+  string sid = 3;
+  repeated string groups = 4;
+  string integrity_level = 5;
+  bool is_elevated = 6;
+}
+
+// --- Lateral Movement Module ---
+
+message LateralTask {
+  oneof operation {
+    LateralPsexec psexec = 1;
+    LateralWmi wmi = 2;
+    LateralDcom dcom = 3;
+    LateralWinrm winrm = 4;
+    LateralSchtask schtask = 5;
+  }
+}
+
+message LateralPsexec {
+  string target = 1;
+  bytes payload = 2;
+  string service_name = 3;
+  optional string username = 4;
+  optional string password = 5;
+  optional string domain = 6;
+}
+
+message LateralWmi {
+  string target = 1;
+  string command = 2;
+  optional string username = 3;
+  optional string password = 4;
+}
+
+message LateralDcom {
+  string target = 1;
+  string command = 2;
+  string dcom_object = 3;
+}
+
+message LateralWinrm {
+  string target = 1;
+  string command = 2;
+  bool use_ssl = 3;
+}
+
+message LateralSchtask {
+  string target = 1;
+  string command = 2;
+  string task_name = 3;
+}
+
+message LateralResultProto {
+  bool success = 1;
+  string target = 2;
+  string method = 3;
+  string output = 4;
+  string error = 5;
+}
+
+// --- Active Directory Module ---
+
+message AdTask {
+  oneof operation {
+    AdGetUsers users = 1;
+    AdGetGroups groups = 2;
+    AdGetComputers computers = 3;
+    AdKerberoast kerberoast = 4;
+    AdAsreproast asreproast = 5;
+    AdQuery query = 6;
+  }
+}
+
+message AdGetUsers {
+  optional string filter = 1;
+  optional bool privileged_only = 2;
+}
+
+message AdGetGroups {
+  optional string filter = 1;
+}
+
+message AdGetComputers {
+  optional string filter = 1;
+  optional bool dcs_only = 2;
+}
+
+message AdKerberoast {
+  optional string format = 1;
+}
+
+message AdAsreproast {
+  optional string format = 1;
+}
+
+message AdQuery {
+  string ldap_filter = 1;
+  repeated string attributes = 2;
+  optional string search_base = 3;
+}
+
+message AdUserProto {
+  string dn = 1;
+  string sam_account_name = 2;
+  string display_name = 3;
+  bool enabled = 4;
+  repeated string groups = 5;
+  string spn = 6;
+}
+
+message AdGroupProto {
+  string dn = 1;
+  string name = 2;
+  string description = 3;
+  repeated string members = 4;
+}
+
+message AdComputerProto {
+  string dn = 1;
+  string name = 2;
+  string os = 3;
+  string os_version = 4;
+  bool is_dc = 5;
+}
+
+message AdKerberoastResultProto {
+  repeated KerberoastTicket tickets = 1;
+}
+
+message KerberoastTicket {
+  string username = 1;
+  string spn = 2;
+  string hash = 3;
+}
+
+// --- Credential Module ---
+
+message CredentialTask {
+  oneof operation {
+    CredDumpSam sam = 1;
+    CredDumpLsass lsass = 2;
+    CredDumpSecrets secrets = 3;
+    CredDumpDpapi dpapi = 4;
+    CredDumpVault vault = 5;
+  }
+}
+
+message CredDumpSam {
+  bool use_shadow_copy = 1;
+}
+
+message CredDumpLsass {
+  string method = 1;
+}
+
+message CredDumpSecrets {}
+message CredDumpDpapi {
+  optional string target_user = 1;
+}
+message CredDumpVault {}
+
+message CredentialProto {
+  string credential_type = 1;
+  string domain = 2;
+  string username = 3;
+  string data = 4;
+  string source = 5;
+}
+
+message CredentialResultProto {
+  repeated CredentialProto credentials = 1;
+}
+
+// ============================================================================
+// Task Types - mod-ad (Active Directory)
+// ============================================================================
+
+// ============================================================================
+// Phase 9: Professional Completion — New Module Messages
+// ============================================================================
+
+// --- Browser Credential Module (T1555.003) ---
+
+message BrowserTask {
+  oneof operation {
+    BrowserDumpPasswords passwords = 1;
+    BrowserDumpCookies cookies = 2;
+    BrowserDumpHistory history = 3;
+    BrowserDumpAll all = 4;
+  }
+}
+
+message BrowserDumpPasswords {
+  repeated string browsers = 1;
+  bool decrypt = 2;
+}
+
+message BrowserDumpCookies {
+  repeated string browsers = 1;
+  repeated string domains = 2;
+}
+
+message BrowserDumpHistory {
+  repeated string browsers = 1;
+  int32 max_entries = 2;
+}
+
+message BrowserDumpAll {
+  repeated string browsers = 1;
+  bool decrypt = 2;
+}
+
+message BrowserCredential {
+  string browser = 1;
+  string url = 2;
+  string username = 3;
+  string password = 4;
+  int64 created = 5;
+  int64 last_used = 6;
+}
+
+message BrowserCookie {
+  string browser = 1;
+  string domain = 2;
+  string name = 3;
+  string value = 4;
+  int64 expires = 5;
+  bool secure = 6;
+  bool http_only = 7;
+}
+
+message BrowserHistory {
+  string browser = 1;
+  string url = 2;
+  string title = 3;
+  int64 visit_time = 4;
+  int32 visit_count = 5;
+}
+
+message BrowserOutput {
+  repeated BrowserCredential credentials = 1;
+  repeated BrowserCookie cookies = 2;
+  repeated BrowserHistory history = 3;
+}
+
+// --- WiFi Credential Module (T1040) ---
+
+message WifiTask {
+  bool include_passwords = 1;
+}
+
+message WifiCredential {
+  string ssid = 1;
+  string auth_type = 2;
+  string encryption = 3;
+  string password = 4;
+  bool connected = 5;
+}
+
+message WifiOutput {
+  repeated WifiCredential credentials = 1;
+}
+
+// --- Port Forward Module (T1090) ---
+
+message PortForwardTask {
+  oneof operation {
+    PortForwardStart start = 1;
+    PortForwardStop stop = 2;
+    PortForwardList list = 3;
+  }
+}
+
+message PortForwardStart {
+  string bind_host = 1;
+  uint32 bind_port = 2;
+  string forward_host = 3;
+  uint32 forward_port = 4;
+  bool reverse = 5;
+}
+
+message PortForwardStop {
+  uint32 forward_id = 1;
+}
+
+message PortForwardList {}
+
+message PortForwardEntry {
+  uint32 id = 1;
+  string bind_host = 2;
+  uint32 bind_port = 3;
+  string forward_host = 4;
+  uint32 forward_port = 5;
+  bool reverse = 6;
+  uint64 bytes_transferred = 7;
+}
+
+message PortForwardOutput {
+  repeated PortForwardEntry entries = 1;
+}
+
+// --- NTLM Relay Module (T1557.001) ---
+
+message NtlmRelayTask {
+  string listener_host = 1;
+  uint32 listener_port = 2;
+  string target_host = 3;
+  uint32 target_port = 4;
+  string target_protocol = 5;
+}
+
+message NtlmRelayOutput {
+  bool success = 1;
+  string relayed_user = 2;
+  string target = 3;
+  string result = 4;
+}
+
+// --- RDP Hijack Module (T1563.002) ---
+
+message RdpHijackTask {
+  uint32 session_id = 1;
+}
+
+message RdpHijackOutput {
+  bool success = 1;
+  uint32 session_id = 2;
+  string username = 3;
+}
+
+// --- Audio Capture Module (T1123) ---
+
+message AudioCaptureTask {
+  uint32 duration_secs = 1;
+  string format = 2;
+}
+
+message AudioCaptureOutput {
+  bytes audio_data = 1;
+  string format = 2;
+  uint32 sample_rate = 3;
+  uint32 channels = 4;
+  uint32 duration_ms = 5;
+}
+
+// --- Webcam Capture Module (T1125) ---
+
+message WebcamCaptureTask {
+  uint32 device_index = 1;
+  string format = 2;
+}
+
+message WebcamCaptureOutput {
+  bytes image_data = 1;
+  string format = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+}
+
+// --- USB Monitor Module (T1120) ---
+
+message UsbMonitorTask {
+  oneof operation {
+    UsbMonitorStart start = 1;
+    UsbMonitorStop stop = 2;
+    UsbMonitorList list = 3;
+  }
+}
+
+message UsbMonitorStart {
+  uint32 poll_interval_secs = 1;
+}
+
+message UsbMonitorStop {}
+
+message UsbMonitorList {}
+
+message UsbDevice {
+  string device_id = 1;
+  string description = 2;
+  string manufacturer = 3;
+  string serial_number = 4;
+  int64 first_seen = 5;
+  bool currently_connected = 6;
+}
+
+message UsbMonitorOutput {
+  repeated UsbDevice devices = 1;
+}
+
+// --- Screenshot Streaming (T1113) ---
+
+message ScreenshotStreamTask {
+  uint32 interval_ms = 1;
+  uint32 quality = 2;
+  uint32 max_frames = 3;
+}
+
+message ScreenshotStreamOutput {
+  repeated bytes frames = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  uint32 frame_count = 4;
+}
+
+// ============================================================================
+// Background Jobs (Phase 11)
+// ============================================================================
+
+// Job control messages
+message JobListRequest {}
+
+message JobListResponse {
+  repeated JobInfo jobs = 1;
+}
+
+message JobInfo {
+  uint32 job_id = 1;
+  bytes task_id = 2;
+  string description = 3;
+  JobStatus status = 4;
+  int64 created_at = 5;
+  optional int64 completed_at = 6;
+  uint32 progress = 7; // 0-100
+}
+
+enum JobStatus {
+  JOB_STATUS_RUNNING = 0;
+  JOB_STATUS_COMPLETED = 1;
+  JOB_STATUS_FAILED = 2;
+  JOB_STATUS_CANCELLED = 3;
+}
+
+message JobKillRequest {
+  uint32 job_id = 1;
+}
+
+message JobKillResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message JobOutput {
+  uint32 job_id = 1;
+  bytes task_id = 2;
+  bytes output = 3;
+  bool is_final = 4;
+  optional JobStatus final_status = 5;
+}
+
+message GetJobOutputRequest {
+  uint32 job_id = 1;
+}
+
+message GetJobOutputResponse {
+  repeated bytes output_chunks = 1;
+  bool is_complete = 2;
+  optional JobStatus final_status = 3;
+}
+
+service JobService {
+  rpc ListJobs(JobListRequest) returns (JobListResponse);
+  rpc KillJob(JobKillRequest) returns (JobKillResponse);
+  rpc GetJobOutput(GetJobOutputRequest) returns (GetJobOutputResponse);
+}
+
+// ============================================================================
+// Audit Service (Phase 12)
+// ============================================================================
+
+service AuditService {
+  // List audit events with pagination
+  rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
+
+  // Stream audit events in real-time
+  rpc StreamAuditEvents(StreamAuditEventsRequest) returns (stream AuditEvent);
+
+  // Verify tamper-evident chain integrity
+  rpc VerifyChainIntegrity(VerifyChainIntegrityRequest) returns (VerifyChainIntegrityResponse);
+}
+
+message ListAuditEventsRequest {
+  uint32 limit = 1;
+  uint32 offset = 2;
+  string event_type = 3;  // Filter by type (optional)
+  bytes operator_id = 4;   // Filter by operator (optional)
+}
+
+message ListAuditEventsResponse {
+  repeated AuditEvent events = 1;
+  uint32 total_count = 2;
+}
+
+message StreamAuditEventsRequest {
+  string event_type = 1;  // Filter (optional)
+}
+
+message AuditEvent {
+  bytes event_id = 1;
+  string event_type = 2;
+  bytes operator_id = 3;
+  Timestamp timestamp = 4;
+  bytes previous_hash = 5;
+  bytes event_hash = 6;
+  string details = 7;  // JSON payload
+}
+
+message VerifyChainIntegrityRequest {
+  uint32 check_last_n = 1;  // Verify last N events (0 = all)
+}
+
+message VerifyChainIntegrityResponse {
+  bool is_valid = 1;
+  string error_message = 2;
+  uint32 events_checked = 3;
+}

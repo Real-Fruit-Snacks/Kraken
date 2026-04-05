@@ -1,0 +1,40 @@
+[package]
+name = "live-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[test]]
+name = "live_e2e"
+path = "src/live_e2e.rs"
+
+[[test]]
+name = "live_edge_cases"
+path = "src/live_edge_cases.rs"
+
+[[test]]
+name = "live_modules"
+path = "src/live_modules.rs"
+
+[[test]]
+name = "live_mesh"
+path = "src/live_mesh.rs"
+
+[dependencies]
+common = { path = "../../crates/common" }
+protocol = { path = "../../crates/protocol", default-features = false }
+crypto = { path = "../../crates/crypto" }
+config = { path = "../../crates/config" }
+tokio = { version = "1", features = ["full", "process", "time"] }
+reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "json"] }
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rand = "0.8"
+hex = "0.4"
+prost = "0.12"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

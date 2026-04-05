@@ -1,0 +1,268 @@
+# ==============================================================================
+# Kraken C2 Framework - .gitignore
+# ==============================================================================
+# ONLY files required to build, test, and run the application are committed:
+#   - Rust source code & Cargo manifests
+#   - Frontend source code & npm configs
+#   - Proto definitions & migrations
+#   - Build tooling (Justfile, Makefile, scripts/)
+#   - README.md & LICENSE
+# Everything else is excluded.
+# ==============================================================================
+
+
+# ==============================================================================
+# AI / LLM ARTIFACTS
+# ==============================================================================
+
+**/AGENTS.md
+**/AGENTS-SUMMARY.md
+**/.agents-index.md
+**/CLAUDE.md
+**/.omc/
+.claude/
+.cursor/
+.copilot/
+.codeium/
+.windsurf/
+.aider*
+.continue/
+
+
+# ==============================================================================
+# DOCUMENTATION — NOT NEEDED FOR BUILDING
+# ==============================================================================
+
+# Design specifications (reference only, not compiled)
+/kraken-spec/
+
+# Wiki (supplementary content, not build-essential)
+/wiki/
+
+# Docs subdirectories (session artifacts, planning, status reports)
+/docs/archive/
+/docs/completed-features/
+/docs/planning/
+/docs/superpowers/
+
+# Only /docs/OPERATOR.md, /docs/DECISIONS.md, /docs/INDEX.md,
+# /docs/TESTING.md are committed — everything else under docs/ is excluded above.
+
+# Catch-all for loose session/report markdown at root
+/BUG-*.md
+/SESSION-*.txt
+/SESSION-*.md
+/ULTRAWORK-*.md
+/WEB-UI-*.md
+/CORS-*.md
+/WEBSOCKET-*.md
+/RESEARCH_*.md
+/WINRM_*.md
+/COMMAND-EXECUTION-*.md
+*-VERIFICATION-*.md
+*-VERIFICATION.md
+*-COMPLETE*.md
+
+# Ad-hoc root-level test files (real tests live in /tests/, /scripts/, /kraken-web/e2e/)
+/test-*.spec.ts
+/test_e2e_*.sh
+/test_grpc_*.sh
+/test_interactive.sh
+/test_jobs.sql
+/test_path_validation.rs
+/test_operator.expect
+
+# Data directory (runtime databases, not source)
+/data/
+
+
+# ==============================================================================
+# RUST BUILD
+# ==============================================================================
+
+/target/
+/fuzz/target/
+/fuzz/artifacts/
+/fuzz/corpus/
+/benches/target/
+*.rlib
+*.rmeta
+
+# NOTE: Cargo.lock IS committed — binary workspace needs reproducible builds.
+
+
+# ==============================================================================
+# FRONTEND BUILD (kraken-web/)
+# ==============================================================================
+
+**/node_modules/
+/kraken-web/dist/
+/kraken-web/.vite/
+/kraken-web/.vitest/
+**/*.tsbuildinfo
+/kraken-web/playwright-report/
+/kraken-web/playwright-live-report/
+/kraken-web/test-results/
+/kraken-web/.playwright/
+/kraken-web/screenshots/
+/kraken-web/audit-report/
+/kraken-web/audit-results.json
+/kraken-web/coverage/
+
+
+# ==============================================================================
+# SECRETS & CRYPTOGRAPHIC MATERIAL
+# ==============================================================================
+
+.env
+.env.*
+!.env.example
+module_signing.key
+module_signing.pub
+*.key
+*.pub
+*.pem
+*.pfx
+*.p12
+*.p8
+*.jks
+*.keystore
+*.crt
+*.cer
+*.csr
+
+
+# ==============================================================================
+# DATABASES
+# ==============================================================================
+
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-shm
+*.db-wal
+
+# NOTE: /migrations/*.sql ARE committed — they define the schema.
+
+
+# ==============================================================================
+# LOGS
+# ==============================================================================
+
+*.log
+*.log.*
+*.out
+/logs/
+/log/
+
+
+# ==============================================================================
+# TEST & COVERAGE ARTIFACTS
+# ==============================================================================
+
+/coverage/
+/test-results/
+cobertura.xml
+tarpaulin-report.html
+coverage.xml
+lcov.info
+.nyc_output/
+/playwright-report/
+/playwright-live-report/
+playwright.results.json
+.playwright/
+
+
+# ==============================================================================
+# C2 OPERATIONAL FILES
+# ==============================================================================
+
+/profiles/*.toml
+*.blob
+implant-config*.toml
+implant-config*.json
+c2-config*.toml
+c2-config*.json
+/loot/
+
+
+# ==============================================================================
+# BINARY & PACKAGE ARTIFACTS
+# ==============================================================================
+
+*.deb
+*.rpm
+*.dmg
+*.pkg
+*.msi
+*.apk
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.pdb
+*.lib
+*.exp
+
+
+# ==============================================================================
+# IDE & EDITOR
+# ==============================================================================
+
+.vscode/
+*.code-workspace
+.idea/
+*.iml
+*.iws
+*.ipr
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+.vim/
+tags
+TAGS
+\#*\#
+.\#*
+cscope.*
+
+
+# ==============================================================================
+# OS FILES
+# ==============================================================================
+
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*.lnk
+.directory
+
+
+# ==============================================================================
+# DOCKER & MISC
+# ==============================================================================
+
+docker-compose.override.yml
+docker-compose.override.yaml
+/tmp/
+/temp/
+/.tmp/
+build.rs.out
+*.bak
+*.backup
+*.orig
+*.save
+core
+core.*
+vgcore.*

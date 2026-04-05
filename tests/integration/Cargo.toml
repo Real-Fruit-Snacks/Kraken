@@ -1,0 +1,51 @@
+[package]
+name = "integration-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[test]]
+name = "phase3_modules"
+path = "phase3_modules.rs"
+
+[[test]]
+name = "phase4_opsec"
+path = "phase4_opsec.rs"
+
+[[test]]
+name = "phase5_mesh"
+path = "phase5_mesh.rs"
+
+[[test]]
+name = "stress_tests"
+path = "stress_tests.rs"
+
+[[test]]
+name = "memory_safety"
+path = "memory_safety.rs"
+
+[[test]]
+name = "module_hotreload"
+path = "module_hotreload.rs"
+
+[[test]]
+name = "implant_lifecycle"
+path = "implant_lifecycle.rs"
+
+[dev-dependencies]
+common = { path = "../../crates/common" }
+module-store = { path = "../../crates/module-store" }
+implant-core = { path = "../../crates/implant-core" }
+implant-loader = { path = "../../crates/implant-loader" }
+mod-evasion = { path = "../../crates/implant-modules/mod-evasion" }
+obfuscation = { path = "../../crates/obfuscation" }
+mesh = { path = "../../crates/mesh" }
+crypto = { path = "../../crates/crypto" }
+db = { path = "../../crates/db" }
+protocol = { path = "../../crates/protocol" }
+prost = "0.12"
+dashmap = "5"
+tokio = { version = "1", features = ["rt", "macros", "sync"] }
+config = { path = "../../crates/config" }
+rand = "0.8"
+base64 = "0.22"

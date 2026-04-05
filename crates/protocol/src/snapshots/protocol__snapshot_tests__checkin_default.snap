@@ -1,0 +1,11 @@
+---
+source: crates/protocol/src/lib.rs
+assertion_line: 74
+expression: checkin
+---
+CheckIn {
+    implant_id: None,
+    local_time: None,
+    task_responses: [],
+    loaded_modules: [],
+}

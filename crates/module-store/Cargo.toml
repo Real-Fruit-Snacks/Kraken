@@ -1,0 +1,15 @@
+[package]
+name = "module-store"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+common = { path = "../common" }
+db = { path = "../db" }
+ring = "0.17"
+tokio = { version = "1", features = ["sync", "rt", "macros"] }
+tracing = "0.1"
+thiserror = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+goblin = "0.8"
+toml = "0.8"

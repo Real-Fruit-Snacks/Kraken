@@ -1,0 +1,28 @@
+[package]
+name = "mod-ad"
+version = "0.1.0"
+edition = "2021"
+description = "Kraken Active Directory enumeration and Kerberos attack module"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+dynamic-entry = []
+
+[dependencies]
+common = { path = "../../common" }
+tracing = "0.1"
+tokio = { version = "1.35", features = ["rt"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_Networking_Ldap",
+    "Win32_Security",
+    "Win32_Security_Authentication_Identity",
+    "Win32_System_Threading",
+] }

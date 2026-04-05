@@ -1,0 +1,24 @@
+[package]
+name = "implant-sim"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+common = { path = "../common" }
+crypto = { path = "../crypto" }
+protocol = { path = "../protocol" }
+implant-core = { path = "../implant-core" }
+config = { path = "../config" }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+prost = { workspace = true }
+anyhow = { workspace = true }
+hex = { workspace = true }
+rand = { workspace = true }
+
+[[bin]]
+name = "implant-sim"
+path = "src/main.rs"

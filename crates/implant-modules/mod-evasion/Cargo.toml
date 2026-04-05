@@ -1,0 +1,29 @@
+[package]
+name = "mod-evasion"
+version = "0.1.0"
+edition = "2021"
+description = "Kraken ETW, AMSI, and ntdll evasion module"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+common = { path = "../../common" }
+tracing = "0.1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_System_Memory",
+    "Win32_System_LibraryLoader",
+    "Win32_System_SystemServices",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_Kernel",
+    "Win32_System_Threading",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+] }
+
+[features]
+default = []
+dynamic-entry = []

@@ -1,0 +1,42 @@
+# Sample implant configuration
+
+# Server's static X25519 public key (32 bytes, hex-encoded)
+# Generate with: openssl rand -hex 32
+server_public_key = "0000000000000000000000000000000000000000000000000000000000000000"
+
+# Default check-in interval in seconds
+checkin_interval = 60
+
+# Jitter percentage (0-100)
+jitter_percent = 20
+
+# Maximum retry attempts before giving up
+max_retries = 10
+
+# Kill date (Unix timestamp, 0 = never)
+kill_date = 0
+
+# Transport configurations (tried in order)
+[[transports]]
+transport_type = "https"
+address = "https://c2.example.com:443"
+# cert_pin = "sha256_fingerprint_here"
+
+[[transports]]
+transport_type = "http"
+address = "http://backup.example.com:8080"
+
+# HTTP profile
+[profile]
+user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+checkin_uri = "/api/v1/status"
+task_uri = "/api/v1/submit"
+request_transform = "base64"
+response_transform = "base64"
+request_headers = [
+    ["Accept", "application/json"],
+    ["Accept-Language", "en-US,en;q=0.9"],
+]
+response_headers = [
+    ["Content-Type", "application/json"],
+]

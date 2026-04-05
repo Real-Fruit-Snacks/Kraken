@@ -1,0 +1,12 @@
+services:
+  envoy:
+    image: envoyproxy/envoy:v1.28-latest
+    container_name: kraken-envoy
+    command: ["-c", "/etc/envoy/envoy.yaml", "--log-level", "info"]
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
+    ports:
+      - "8081:8081"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

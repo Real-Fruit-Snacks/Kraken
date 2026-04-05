@@ -1,0 +1,62 @@
+---
+source: crates/protocol/src/lib.rs
+assertion_line: 161
+expression: response
+---
+TaskResponse {
+    task_id: Some(
+        Uuid {
+            value: [
+                171,
+                205,
+                18,
+                52,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            ],
+        },
+    ),
+    status: Completed,
+    completed_at: Some(
+        Timestamp {
+            millis: 1711843300500,
+        },
+    ),
+    result: Some(
+        Success(
+            TaskSuccess {
+                result_data: [
+                    99,
+                    111,
+                    109,
+                    109,
+                    97,
+                    110,
+                    100,
+                    32,
+                    111,
+                    117,
+                    116,
+                    112,
+                    117,
+                    116,
+                    32,
+                    104,
+                    101,
+                    114,
+                    101,
+                ],
+            },
+        ),
+    ),
+}

@@ -1,0 +1,35 @@
+---
+source: crates/protocol/src/lib.rs
+assertion_line: 143
+expression: statuses
+---
+[
+    (
+        "unspecified",
+        0,
+    ),
+    (
+        "queued",
+        1,
+    ),
+    (
+        "dispatched",
+        2,
+    ),
+    (
+        "completed",
+        3,
+    ),
+    (
+        "failed",
+        4,
+    ),
+    (
+        "cancelled",
+        5,
+    ),
+    (
+        "expired",
+        6,
+    ),
+]

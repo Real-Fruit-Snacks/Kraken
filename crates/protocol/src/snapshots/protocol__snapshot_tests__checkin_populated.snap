@@ -1,0 +1,39 @@
+---
+source: crates/protocol/src/lib.rs
+assertion_line: 90
+expression: checkin
+---
+CheckIn {
+    implant_id: Some(
+        Uuid {
+            value: [
+                18,
+                52,
+                86,
+                120,
+                171,
+                205,
+                18,
+                52,
+                171,
+                205,
+                18,
+                52,
+                86,
+                120,
+                154,
+                188,
+            ],
+        },
+    ),
+    local_time: Some(
+        Timestamp {
+            millis: 1711843200000,
+        },
+    ),
+    task_responses: [],
+    loaded_modules: [
+        "mod-shell",
+        "mod-file",
+    ],
+}

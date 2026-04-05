@@ -1,0 +1,43 @@
+[package]
+name = "kraken-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[[bin]]
+name = "protocol_frame"
+path = "fuzz_targets/protocol_frame.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "crypto_decrypt"
+path = "fuzz_targets/crypto_decrypt.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "module_blob"
+path = "fuzz_targets/module_blob.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "task_sequence"
+path = "fuzz_targets/task_sequence.rs"
+test = false
+doc = false
+bench = false
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+protocol = { path = "../crates/protocol" }
+crypto = { path = "../crates/crypto" }
+common = { path = "../crates/common" }

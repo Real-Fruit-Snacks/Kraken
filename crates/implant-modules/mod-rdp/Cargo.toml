@@ -1,0 +1,25 @@
+[package]
+name = "mod-rdp"
+version = "0.1.0"
+edition = "2021"
+description = "Kraken RDP session hijacking module"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+common = { path = "../../common" }
+protocol = { path = "../../protocol", default-features = false }
+prost = "0.12"
+tracing = "0.1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_System_RemoteDesktop",
+    "Win32_Security",
+] }
+
+[features]
+default = []
+dynamic-entry = []

@@ -1,0 +1,11 @@
+---
+source: crates/protocol/src/lib.rs
+assertion_line: 96
+expression: response
+---
+CheckInResponse {
+    tasks: [],
+    new_checkin_interval: None,
+    new_jitter_percent: None,
+    commands: [],
+}

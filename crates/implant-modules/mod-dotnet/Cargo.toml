@@ -1,0 +1,38 @@
+[package]
+name = "mod-dotnet"
+version = "0.1.0"
+edition = "2021"
+description = "Kraken .NET assembly execution module (execute-assembly)"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+common = { path = "../../common" }
+protocol = { path = "../../protocol", default-features = false }
+prost = "0.12"
+tracing = "0.1"
+zeroize = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_System_Ole",
+    "Win32_System_Variant",
+    "Win32_System_Threading",
+    "Win32_System_Memory",
+    "Win32_System_Pipes",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+] }
+
+# For OPSEC integration
+mod-evasion = { path = "../mod-evasion", optional = true }
+
+[features]
+default = []
+opsec = ["dep:mod-evasion"]
+
+[dev-dependencies]
+tempfile = "3.10"

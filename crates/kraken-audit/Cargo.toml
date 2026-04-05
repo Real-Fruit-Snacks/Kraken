@@ -1,0 +1,19 @@
+[package]
+name = "kraken-audit"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+common = { path = "../common" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true, features = ["v4", "serde"] }
+thiserror = { workspace = true }
+sha2 = "0.10"
+hmac = "0.12"
+hex = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }

@@ -1,0 +1,21 @@
+[package]
+name = "mod-socks"
+version = "0.1.0"
+edition = "2021"
+description = "Kraken reverse SOCKS proxy module - implant as exit node"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+common = { path = "../../common" }
+protocol = { path = "../../protocol", default-features = false }
+prost = "0.12"
+tracing = "0.1"
+
+[features]
+default = []
+dynamic-entry = []
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "net", "io-util", "sync", "macros"] }

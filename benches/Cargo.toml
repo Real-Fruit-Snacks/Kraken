@@ -1,0 +1,32 @@
+[package]
+name = "kraken-benches"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[[bench]]
+name = "crypto"
+harness = false
+
+[[bench]]
+name = "mesh"
+harness = false
+
+[[bench]]
+name = "module"
+harness = false
+
+[dependencies]
+# Internal crates
+crypto = { path = "../crates/crypto" }
+mesh = { path = "../crates/mesh" }
+module-store = { path = "../crates/module-store" }
+common = { path = "../crates/common" }
+
+# External
+criterion = { workspace = true }
+tokio = { workspace = true }
+rand = { workspace = true }

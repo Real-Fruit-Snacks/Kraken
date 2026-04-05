@@ -1,0 +1,29 @@
+[default]
+# Use LLVM engine (required when strip=true in release profile)
+engine = "Llvm"
+
+# Exclude test files and benchmarks from coverage
+exclude-files = [
+    "*/tests/*",
+    "*/benches/*",
+    "crates/implant-sim/*",
+    "crates/task-cli/*",
+    "tests/*",
+    "fuzz/*",
+]
+
+# Timeout for long-running tests
+timeout = "300s"
+
+# Output formats
+out = ["Xml", "Html"]
+output-dir = "coverage"
+
+# Skip clean to speed up runs
+skip-clean = true
+
+# Run all workspace members
+all = true
+
+# Target features
+all-features = false

@@ -1,0 +1,32 @@
+[package]
+name = "mod-bof"
+version = "0.1.0"
+edition = "2021"
+description = "Kraken BOF (Beacon Object File) execution module"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+common = { path = "../../common" }
+protocol = { path = "../../protocol" }
+prost = "0.12"
+tracing = "0.1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_System_Memory",
+    "Win32_System_LibraryLoader",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[features]
+default = []
+dynamic-entry = []
+
+[dev-dependencies]
+tempfile = "3.10"
+serial_test = { workspace = true }

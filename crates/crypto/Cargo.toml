@@ -1,0 +1,19 @@
+[package]
+name = "crypto"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+common = { path = "../common" }
+ring = "0.17"
+x25519-dalek = { version = "2.0", features = ["static_secrets"] }
+zeroize = { workspace = true }
+thiserror.workspace = true
+hex = { workspace = true }
+rand_core = { version = "0.6", features = ["getrandom"] }
+rcgen = { version = "0.13", features = ["pem"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rustls-pemfile = "2"
+
+[dev-dependencies]
+proptest = { workspace = true }

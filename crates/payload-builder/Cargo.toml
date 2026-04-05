@@ -1,0 +1,22 @@
+[package]
+name = "payload-builder"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Kraken C2 payload generation toolkit"
+
+[[bin]]
+name = "kraken-payload"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+anyhow.workspace = true
+serde = { workspace = true }
+serde_json.workspace = true
+thiserror.workspace = true
+base64 = "0.22"
+rand = "0.8"
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,29 @@
+[package]
+name = "mod-scan"
+version = "0.1.0"
+edition = "2021"
+description = "Kraken network scanning module"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+common = { path = "../../common" }
+protocol = { path = "../../protocol", default-features = false }
+prost = "0.12"
+tracing = "0.1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_Networking_WinSock",
+    "Win32_System_IO",
+    "Win32_NetworkManagement_IpHelper",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[features]
+default = []
+dynamic-entry = []

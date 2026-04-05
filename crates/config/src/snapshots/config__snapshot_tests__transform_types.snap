@@ -1,0 +1,11 @@
+---
+source: crates/config/src/lib.rs
+assertion_line: 85
+expression: transforms
+---
+[
+  "none",
+  "base64",
+  "base64url",
+  "hex"
+]

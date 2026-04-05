@@ -1,0 +1,61 @@
+[package]
+name = "server"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "kraken-server"
+path = "src/main.rs"
+
+[[bin]]
+name = "kraken-keygen"
+path = "src/bin/keygen.rs"
+
+[[bin]]
+name = "kraken-register-module"
+path = "src/bin/register_module.rs"
+
+[dependencies]
+clap = { workspace = true }
+hex = { workspace = true }
+tracing-subscriber = { workspace = true }
+common = { path = "../common" }
+crypto = { path = "../crypto" }
+protocol = { path = "../protocol" }
+config = { path = "../config" }
+db = { path = "../db" }
+kraken-rbac = { path = "../kraken-rbac" }
+kraken-audit = { path = "../kraken-audit" }
+mesh = { path = "../mesh" }
+module-store = { path = "../module-store" }
+base64 = "0.22"
+x509-parser = "0.16"
+sha2 = "0.10"
+tokio-rustls = "0.26"
+tokio = { workspace = true, features = ["full"] }
+tonic = { workspace = true }
+axum = { version = "0.7", features = ["tokio", "ws"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+tracing = { workspace = true }
+prost = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+dashmap = "5"
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-core = "0.3"
+sqlx = { workspace = true, features = ["runtime-tokio", "sqlite"] }
+reqwest = { version = "0.12", features = ["rustls-tls", "json"], default-features = false }
+hmac = "0.12"
+jsonwebtoken = "9"
+
+[dev-dependencies]
+tokio-stream = { version = "0.1", features = ["net"] }
+reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+mockall = { workspace = true }
+tokio-test = { workspace = true }
+async-trait = "0.1"
+rustls = { version = "0.23", features = ["ring"] }

@@ -1,0 +1,20 @@
+[package]
+name = "task-cli"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "task"
+path = "src/main.rs"
+
+[dependencies]
+common = { path = "../common" }
+protocol = { path = "../protocol" }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tonic = { workspace = true }
+prost = { workspace = true }
+anyhow = { workspace = true }
+hex = "0.4"

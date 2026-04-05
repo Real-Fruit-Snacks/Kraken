@@ -1,0 +1,38 @@
+[package]
+name = "mod-mesh"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "mesh_test"
+path = "src/bin/mesh_test.rs"
+
+[dependencies]
+common = { path = "../../common" }
+mesh = { path = "../../mesh" }
+crypto = { path = "../../crypto" }
+protocol = { path = "../../protocol", default-features = false }
+prost = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+hex = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Storage_FileSystem",
+    "Win32_System_Pipes",
+    "Win32_System_IO",
+    "Win32_Security",
+    "Win32_Foundation",
+] }
+
+[features]
+default = []
+dynamic-entry = []
+
+[dev-dependencies]
+serial_test = { workspace = true }

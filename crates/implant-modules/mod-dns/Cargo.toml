@@ -1,0 +1,13 @@
+[package]
+name = "mod-dns"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+common = { path = "../../common" }
+rand = "0.8"
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+proptest = { workspace = true }

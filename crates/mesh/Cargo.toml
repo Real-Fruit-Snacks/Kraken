@@ -1,0 +1,16 @@
+[package]
+name = "mesh"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+common = { path = "../common" }
+crypto = { path = "../crypto" }
+petgraph = "0.6"
+chrono = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+prost = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

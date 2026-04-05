@@ -1,0 +1,11 @@
+---
+source: crates/config/src/lib.rs
+assertion_line: 74
+expression: types
+---
+[
+  "http",
+  "https",
+  "tcp",
+  "dns"
+]

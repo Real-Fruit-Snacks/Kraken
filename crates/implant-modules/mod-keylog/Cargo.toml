@@ -1,0 +1,29 @@
+[package]
+name = "mod-keylog"
+version = "0.1.0"
+edition = "2021"
+description = "Kraken keystroke logging module"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+common = { path = "../../common" }
+protocol = { path = "../../protocol", default-features = false }
+prost = "0.12"
+tracing = "0.1"
+parking_lot = "0.12"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Threading",
+    "Win32_System_LibraryLoader",
+    "Win32_Globalization",
+] }
+
+[features]
+default = []
+dynamic-entry = []

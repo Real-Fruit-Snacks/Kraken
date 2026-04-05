@@ -1,0 +1,88 @@
+---
+source: crates/protocol/src/lib.rs
+assertion_line: 128
+expression: response
+---
+CheckInResponse {
+    tasks: [
+        Task {
+            task_id: Some(
+                Uuid {
+                    value: [
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        1,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        1,
+                    ],
+                },
+            ),
+            task_type: "shell",
+            task_data: [
+                119,
+                104,
+                111,
+                97,
+                109,
+                105,
+            ],
+            issued_at: None,
+            operator_id: None,
+        },
+        Task {
+            task_id: Some(
+                Uuid {
+                    value: [
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        2,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        2,
+                    ],
+                },
+            ),
+            task_type: "file_list",
+            task_data: [
+                67,
+                58,
+                92,
+                85,
+                115,
+                101,
+                114,
+                115,
+            ],
+            issued_at: None,
+            operator_id: None,
+        },
+    ],
+    new_checkin_interval: Some(
+        60,
+    ),
+    new_jitter_percent: Some(
+        20,
+    ),
+    commands: [],
+}

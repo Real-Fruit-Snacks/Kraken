@@ -1,0 +1,27 @@
+[package]
+name = "mod-token"
+version = "0.1.0"
+edition = "2021"
+description = "Kraken token manipulation module"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+common = { path = "../../common" }
+protocol = { path = "../../protocol", default-features = false }
+prost = "0.12"
+tracing = "0.1"
+tokio = { version = "1.35", features = ["rt", "rt-multi-thread"] }
+
+[features]
+default = []
+dynamic-entry = []
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authentication_Identity",
+    "Win32_System_Threading",
+] }

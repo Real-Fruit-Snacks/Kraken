@@ -1,0 +1,10 @@
+[package]
+name = "obfuscation-utils"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Post-build PE obfuscation utilities for Kraken C2 (section renaming, timestamp stomping)"
+
+[dependencies]
+
+[dev-dependencies]

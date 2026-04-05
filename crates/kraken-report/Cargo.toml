@@ -1,0 +1,15 @@
+[package]
+name = "kraken-report"
+version = "0.1.0"
+edition = "2021"
+description = "Reporting engine for Kraken C2 - engagement reports, IOCs, and exports"
+
+[dependencies]
+chrono = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true, features = ["v4", "serde"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
