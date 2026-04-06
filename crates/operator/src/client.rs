@@ -1,7 +1,7 @@
 //! gRPC client for teamserver
 
 use anyhow::Result;
-use tonic::transport::Channel;
+use tonic::transport::{Certificate, Channel, ClientTlsConfig, Identity};
 
 use common::{ImplantId, TaskId};
 use protocol::{
@@ -37,8 +37,29 @@ pub struct KrakenClient {
 
 impl KrakenClient {
     /// Connect to teamserver
-    pub async fn connect(addr: &str) -> Result<Self> {
-        let channel = Channel::from_shared(addr.to_string())?.connect().await?;
+    pub async fn connect(addr: &str, ca_path: Option<&str>, cert_path: Option<&str>, key_path: Option<&str>) -> Result<Self> {
+        let channel = if let (Some(ca), Some(cert), Some(key)) = (ca_path, cert_path, key_path) {
+            let ca_cert = std::fs::read(ca)?;
+            let client_cert = std::fs::read(cert)?;
+            let client_key = std::fs::read(key)?;
+
+            let tls = ClientTlsConfig::new()
+                .ca_certificate(Certificate::from_pem(ca_cert))
+                .identity(Identity::from_pem(client_cert, client_key));
+
+            let addr = if addr.starts_with("http://") {
+                addr.replace("http://", "https://")
+            } else {
+                addr.to_string()
+            };
+
+            Channel::from_shared(addr)?
+                .tls_config(tls)?
+                .connect()
+                .await?
+        } else {
+            Channel::from_shared(addr.to_string())?.connect().await?
+        };
 
         Ok(Self { channel })
     }

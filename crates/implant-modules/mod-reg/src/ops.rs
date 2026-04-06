@@ -23,6 +23,15 @@ use windows_sys::Win32::System::Registry::{
 /// Accepts paths like "HKLM\\SOFTWARE\\..." or "HKEY_LOCAL_MACHINE\\SOFTWARE\\..."
 #[cfg(windows)]
 fn parse_key_path(key_path: &str) -> Result<(HKEY, String), KrakenError> {
+    // Normalize forward slashes to backslashes so both separators are accepted
+    let key_path_owned;
+    let key_path = if key_path.contains('/') {
+        key_path_owned = key_path.replace('/', "\\");
+        key_path_owned.as_str()
+    } else {
+        key_path
+    };
+
     // Handle bare hive names
     match key_path {
         "HKEY_LOCAL_MACHINE" | "HKLM" => return Ok((HKEY_LOCAL_MACHINE, String::new())),

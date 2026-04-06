@@ -115,8 +115,8 @@ fn list_process_modules_impl(pid: u32) -> Result<ProcessModules, KrakenError> {
         );
 
         modules.push(ProcessModuleInfo {
-            name,
-            path: path.into_owned(),
+            name: name.to_string(),
+            path: path.to_string(),
             base_address: entry.modBaseAddr as u64,
             size: entry.modBaseSize as u64,
         });

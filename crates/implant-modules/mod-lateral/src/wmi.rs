@@ -60,7 +60,7 @@ fn execute_impl(task: &LateralWmi) -> Result<LateralResult, KrakenError> {
     };
 
     unsafe {
-        let hr = CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED);
+        let hr = CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED as u32);
         if hr < 0 && hr != -2147417850i32 {
             // -2147417850 = RPC_E_CHANGED_MODE (already initialized differently — ok)
             return Err(KrakenError::Module(format!("CoInitializeEx hr={:#x}", hr)));

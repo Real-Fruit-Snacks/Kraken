@@ -316,7 +316,7 @@ pub fn load_pe(pe_bytes: &[u8], args: &str) -> Result<String, KrakenError> {
 
         // Flush instruction cache before execution
         let process = GetCurrentProcess();
-        FlushInstructionCache(process, base_addr, size_of_image);
+        windows_sys::Win32::System::Diagnostics::Debug::FlushInstructionCache(process, base_addr, size_of_image);
 
         // --- Step 10: Call entry point ---
         let entry_point = base.add(entry_point_rva);
@@ -474,7 +474,7 @@ unsafe fn resolve_imports(
             break; // Null terminator descriptor
         }
 
-        let dll_name_ptr = base.add(name_rva) as *const i8;
+        let dll_name_ptr = base.add(name_rva) as *const u8;
         let dll_handle = LoadLibraryA(dll_name_ptr);
         if dll_handle == 0 {
             return Err(KrakenError::Module(format!(
@@ -513,11 +513,11 @@ unsafe fn resolve_imports(
 
             let func_ptr = if thunk_val & ordinal_flag != 0 {
                 // Import by ordinal
-                let ordinal = (thunk_val & 0xFFFF) as *const i8;
+                let ordinal = (thunk_val & 0xFFFF) as *const u8;
                 GetProcAddress(dll_handle, ordinal)
             } else {
                 // Import by name — skip 2-byte hint
-                let func_name = base.add(thunk_val + 2) as *const i8;
+                let func_name = base.add(thunk_val + 2) as *const u8;
                 GetProcAddress(dll_handle, func_name)
             };
 

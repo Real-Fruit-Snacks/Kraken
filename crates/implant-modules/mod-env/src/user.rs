@@ -14,10 +14,10 @@ pub fn whoami() -> Result<WhoAmIOutput, KrakenError> {
 fn whoami_impl() -> Result<WhoAmIOutput, KrakenError> {
     use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
     use windows_sys::Win32::Security::{
-        GetTokenInformation, OpenProcessToken, TokenElevation, TokenGroups,
+        GetTokenInformation, TokenElevation, TokenGroups,
         TokenIntegrityLevel, TokenUser, TOKEN_ELEVATION, TOKEN_QUERY,
     };
-    use windows_sys::Win32::System::Threading::GetCurrentProcess;
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
     let mut token: HANDLE = 0;
     let ok = unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) };
@@ -59,8 +59,9 @@ fn get_current_username_windows() -> String {
 #[cfg(windows)]
 fn get_user_sid_string(token: windows_sys::Win32::Foundation::HANDLE) -> String {
     use windows_sys::Win32::Security::{
-        ConvertSidToStringSidW, GetTokenInformation, TokenUser, TOKEN_USER,
+        GetTokenInformation, TokenUser, TOKEN_USER,
     };
+    use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
     use windows_sys::Win32::Foundation::LocalFree;
 
     let mut size: u32 = 0;
@@ -107,8 +108,8 @@ fn get_user_sid_string(token: windows_sys::Win32::Foundation::HANDLE) -> String 
 fn get_group_names(token: windows_sys::Win32::Foundation::HANDLE) -> Vec<String> {
     use windows_sys::Win32::Security::{
         GetTokenInformation, LookupAccountSidW, TokenGroups, TOKEN_GROUPS,
-        SE_GROUP_ENABLED,
     };
+    use windows_sys::Win32::System::SystemServices::SE_GROUP_ENABLED;
 
     let mut size: u32 = 0;
     unsafe {
@@ -142,7 +143,7 @@ fn get_group_names(token: windows_sys::Win32::Foundation::HANDLE) -> Vec<String>
 
     let mut names = Vec::new();
     for group in groups_slice {
-        if (group.Attributes & SE_GROUP_ENABLED) == 0 {
+        if (group.Attributes & SE_GROUP_ENABLED as u32) == 0 {
             continue;
         }
 
@@ -150,7 +151,7 @@ fn get_group_names(token: windows_sys::Win32::Foundation::HANDLE) -> Vec<String>
         let mut domain_buf = [0u16; 256];
         let mut name_size = name_buf.len() as u32;
         let mut domain_size = domain_buf.len() as u32;
-        let mut sid_name_use = 0u32;
+        let mut sid_name_use = 0i32;
 
         let ok = unsafe {
             LookupAccountSidW(
@@ -224,11 +225,12 @@ fn get_integrity_and_elevation(
             // Integrity level is encoded in the last sub-authority of the SID
             let sid = label.Label.Sid;
             if !sid.is_null() {
-                let sub_count = unsafe { (*sid).SubAuthorityCount } as usize;
+                let sid_typed = sid as *const windows_sys::Win32::Security::SID;
+                let sub_count = unsafe { (*sid_typed).SubAuthorityCount } as usize;
                 if sub_count > 0 {
                     let sub_authorities = unsafe {
                         std::slice::from_raw_parts(
-                            (&(*sid).SubAuthority) as *const u32,
+                            (*sid_typed).SubAuthority.as_ptr(),
                             sub_count,
                         )
                     };

@@ -127,6 +127,77 @@ Append-only structured logs for every operation. Operator actions, implant event
 
 ---
 
+## Capabilities
+
+### Core Operations
+| Command | Description | CLI | Web UI |
+|---------|-------------|-----|--------|
+| `shell` | Execute shell commands | ✓ | ✓ |
+| `sleep` | Set callback interval | ✓ | ✓ |
+| `cd` / `pwd` / `ls` | Directory navigation | ✓ | ✓ |
+| `upload` / `download` | File transfer (chunked for >10MB) | ✓ | ✓ |
+
+### Reconnaissance
+| Command | Description | CLI | Web UI |
+|---------|-------------|-----|--------|
+| `env` | System info, network info, env vars, whoami | ✓ | ✓ |
+| `ps` | Process listing and tree view | ✓ | ✓ |
+| `scan` | Port scan, ping sweep, share enumeration | ✓ | ✓ |
+| `ad` | AD enumeration, Kerberoasting, AS-REP roasting | ✓ | ✓ |
+| `reg` | Windows registry operations | ✓ | ✓ |
+| `svc` | Windows service management | ✓ | ✓ |
+
+### Credential Harvesting
+| Command | Description | CLI | Web UI |
+|---------|-------------|-----|--------|
+| `creds` | SAM, LSASS, LSA secrets, DPAPI, vault | ✓ | ✓ |
+| `browser` | Browser passwords, cookies, history | ✓ | ✓ |
+| `wifi` | WiFi credentials | ✓ | ✓ |
+| `token` | Token theft, impersonation, privilege enable | ✓ | ✓ |
+
+### Collection
+| Command | Description | CLI | Web UI |
+|---------|-------------|-----|--------|
+| `keylog` | Keylogger start/stop/dump | ✓ | ✓ |
+| `clipboard` | Clipboard get/set/monitor | ✓ | ✓ |
+| `screenshot` | Single screenshot capture | ✓ | ✓ |
+| `screenshot-stream` | Continuous screenshot capture | ✓ | ✓ |
+| `audio` | Audio capture | ✓ | ✓ |
+| `webcam` | Webcam capture | ✓ | ✓ |
+| `usb` | USB device monitoring | ✓ | ✓ |
+
+### Lateral Movement & Persistence
+| Command | Description | CLI | Web UI |
+|---------|-------------|-----|--------|
+| `lateral` | PSExec, WMI, DCOM, WinRM, scheduled tasks | ✓ | ✓ |
+| `persist` | 7 persistence methods (registry, schtask, service, startup, WMI, logon script) | ✓ | ✓ |
+| `inject` | 9 injection techniques | ✓ | ✓ |
+| `rdp` | RDP session hijacking | ✓ | ✓ |
+| `ntlm-relay` | NTLM relay setup | ✓ | ✓ |
+
+### Networking
+| Command | Description | CLI | Web UI |
+|---------|-------------|-----|--------|
+| `mesh` | Peer-to-peer mesh networking (TCP/SMB) | ✓ | ✓ |
+| `socks` | SOCKS5 proxy | ✓ | ✓ |
+| `portfwd` | Port forwarding (forward/reverse) | ✓ | ✓ |
+
+### Modules
+| Command | Description | CLI | Web UI |
+|---------|-------------|-----|--------|
+| `bof` | Beacon Object File execution | ✓ | ✓ |
+| `modules` | Dynamic module load/unload | ✓ | ✓ |
+
+---
+
+## Interfaces
+
+- **CLI Operator** — Full-featured terminal UI with tab completion, command history, and Vi mode
+- **Web UI** — React-based dashboard with 25+ session tabs, real-time collaboration, and OPSEC risk assessment
+- **15 gRPC Services** — Complete API coverage for all operations
+
+---
+
 ## Architecture
 
 ```

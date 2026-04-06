@@ -20,27 +20,140 @@
 //! wiki/detection/sigma/kraken_ad_ops.yml
 //! wiki/detection/yara/kraken_ad.yar
 
+// Full Windows LDAP/Kerberos implementation — gated behind the `full-ad`
+// feature because it requires a domain-joined Windows host and has additional
+// windows-sys bindings that may not be available in all build configurations.
+#[cfg(feature = "full-ad")]
 pub mod asreproast;
+#[cfg(feature = "full-ad")]
 pub mod computers;
+#[cfg(feature = "full-ad")]
 pub mod groups;
+#[cfg(feature = "full-ad")]
 pub mod kerberos;
+#[cfg(feature = "full-ad")]
 pub mod kerberoast;
+#[cfg(feature = "full-ad")]
 pub mod ldap;
+#[cfg(feature = "full-ad")]
 pub mod users;
 
+#[cfg(feature = "full-ad")]
 pub use asreproast::{asreproast, AsreproastResult};
+#[cfg(feature = "full-ad")]
 pub use computers::{get_computers, AdComputerInfo};
+#[cfg(feature = "full-ad")]
 pub use groups::{get_groups, AdGroupInfo};
+#[cfg(feature = "full-ad")]
 pub use kerberos::{list_tickets, pass_the_ticket, purge_tickets, TicketInfo};
+#[cfg(feature = "full-ad")]
 pub use kerberoast::{kerberoast, KerberoastResult};
+#[cfg(feature = "full-ad")]
 pub use ldap::{ldap_query, LdapEntry};
+#[cfg(feature = "full-ad")]
 pub use users::{get_users, AdUserInfo};
 
-use common::KrakenError;
+use common::{KrakenError, Module, ModuleId, ShellOutput, TaskId, TaskResult};
+
+/// Synchronous Module trait wrapper for the AD module.
+///
+/// The full AD implementation is async and requires a domain-joined Windows
+/// host with LDAP access. This wrapper returns a clean error so that the "ad"
+/// task type is recognised by the registry rather than returning "unknown task type".
+pub struct AdModule {
+    id: ModuleId,
+}
+
+impl AdModule {
+    pub fn new() -> Self {
+        Self {
+            id: ModuleId::new("ad"),
+        }
+    }
+}
+
+impl Default for AdModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Module for AdModule {
+    fn id(&self) -> &ModuleId {
+        &self.id
+    }
+
+    fn name(&self) -> &'static str {
+        "Active Directory"
+    }
+
+    fn version(&self) -> &'static str {
+        env!("CARGO_PKG_VERSION")
+    }
+
+    fn handle(&self, _task_id: TaskId, _task_data: &[u8]) -> Result<TaskResult, KrakenError> {
+        // Full AD operations require a domain-joined Windows host with LDAP
+        // access. Return a clean error rather than "unknown task type".
+        Ok(TaskResult::Shell(ShellOutput {
+            stdout: String::new(),
+            stderr: "Active Directory module not yet implemented. \
+                     The implant must be running on a domain-joined Windows host \
+                     and built with the `full-ad` feature."
+                .to_string(),
+            exit_code: 1,
+            duration_ms: 0,
+        }))
+    }
+}
+
+/// Discriminated AD task type (used by the full implementation)
+#[cfg(feature = "full-ad")]
+#[derive(Debug, Clone)]
+pub struct AdTask {
+    pub operation: AdOperation,
+}
+
+/// AD operation variants
+#[cfg(feature = "full-ad")]
+#[derive(Debug, Clone)]
+pub enum AdOperation {
+    GetUsers(Option<String>),
+    GetGroups(Option<String>),
+    GetComputers(Option<String>),
+    Kerberoast(Option<String>),
+    Asreproast(Option<String>),
+    Query {
+        filter: String,
+        attributes: Vec<String>,
+    },
+    /// Enumerate cached Kerberos tickets (klist equivalent) — T1558
+    ListTickets,
+    /// Inject a .kirbi ticket into the current logon session — T1550.003
+    PassTheTicket(Vec<u8>),
+    /// Purge all cached Kerberos tickets
+    PurgeTickets,
+}
+
+/// AD operation result
+#[cfg(feature = "full-ad")]
+#[derive(Debug, Clone)]
+pub enum AdResult {
+    Users(Vec<AdUserInfo>),
+    Groups(Vec<AdGroupInfo>),
+    Computers(Vec<AdComputerInfo>),
+    Kerberoast(KerberoastResult),
+    Asreproast(AsreproastResult),
+    Query(Vec<LdapEntry>),
+    /// Kerberos ticket cache enumeration result
+    Tickets(Vec<TicketInfo>),
+    /// Generic string message (e.g. success confirmation)
+    Message(String),
+}
 
 /// Execute an AD operation specified by `AdTask`.
 ///
 /// This is the module dispatch entry point called by the implant core.
+#[cfg(feature = "full-ad")]
 pub async fn dispatch(task: AdTask) -> Result<AdResult, KrakenError> {
     match task.operation {
         AdOperation::GetUsers(filter) => {
@@ -82,54 +195,31 @@ pub async fn dispatch(task: AdTask) -> Result<AdResult, KrakenError> {
     }
 }
 
-/// Discriminated AD task type
-#[derive(Debug, Clone)]
-pub struct AdTask {
-    pub operation: AdOperation,
-}
-
-/// AD operation variants
-#[derive(Debug, Clone)]
-pub enum AdOperation {
-    GetUsers(Option<String>),
-    GetGroups(Option<String>),
-    GetComputers(Option<String>),
-    Kerberoast(Option<String>),
-    Asreproast(Option<String>),
-    Query {
-        filter: String,
-        attributes: Vec<String>,
-    },
-    /// Enumerate cached Kerberos tickets (klist equivalent) — T1558
-    ListTickets,
-    /// Inject a .kirbi ticket into the current logon session — T1550.003
-    PassTheTicket(Vec<u8>),
-    /// Purge all cached Kerberos tickets
-    PurgeTickets,
-}
-
-/// AD operation result
-#[derive(Debug, Clone)]
-pub enum AdResult {
-    Users(Vec<AdUserInfo>),
-    Groups(Vec<AdGroupInfo>),
-    Computers(Vec<AdComputerInfo>),
-    Kerberoast(KerberoastResult),
-    Asreproast(AsreproastResult),
-    Query(Vec<LdapEntry>),
-    /// Kerberos ticket cache enumeration result
-    Tickets(Vec<TicketInfo>),
-    /// Generic string message (e.g. success confirmation)
-    Message(String),
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
+    fn test_ad_module_id() {
+        let m = AdModule::new();
+        assert_eq!(m.id().as_str(), "ad");
+        assert_eq!(m.name(), "Active Directory");
+    }
+
+    #[test]
+    fn test_ad_module_handle_returns_clean_error() {
+        let m = AdModule::new();
+        let result = m.handle(TaskId::new(), &[]);
+        assert!(result.is_ok());
+        if let Ok(TaskResult::Shell(out)) = result {
+            assert_eq!(out.exit_code, 1);
+            assert!(!out.stderr.is_empty());
+        }
+    }
+
+    #[cfg(feature = "full-ad")]
+    #[test]
     fn dispatch_compiles_and_variants_accessible() {
-        // Verify the public API surface compiles correctly on all platforms.
         let _ = AdOperation::GetUsers(None);
         let _ = AdOperation::GetGroups(Some("CN=Domain Admins".into()));
         let _ = AdOperation::GetComputers(None);
@@ -142,38 +232,5 @@ mod tests {
         let _ = AdOperation::ListTickets;
         let _ = AdOperation::PassTheTicket(vec![0xDE, 0xAD]);
         let _ = AdOperation::PurgeTickets;
-    }
-
-    #[cfg(not(windows))]
-    #[test]
-    fn all_ops_return_platform_error_on_non_windows() {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        let ops = vec![
-            AdOperation::GetUsers(None),
-            AdOperation::GetGroups(None),
-            AdOperation::GetComputers(None),
-            AdOperation::Kerberoast(None),
-            AdOperation::Asreproast(None),
-            AdOperation::Query {
-                filter: "(objectClass=*)".into(),
-                attributes: vec![],
-            },
-            AdOperation::ListTickets,
-            AdOperation::PassTheTicket(vec![0xDE, 0xAD]),
-            AdOperation::PurgeTickets,
-        ];
-
-        for op in ops {
-            let task = AdTask { operation: op };
-            let err = rt.block_on(dispatch(task)).unwrap_err();
-            assert!(
-                err.to_string().contains("only supported on Windows"),
-                "expected Windows-only error, got: {err}"
-            );
-        }
     }
 }

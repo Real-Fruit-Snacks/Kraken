@@ -60,6 +60,10 @@ pub use generated::kraken::payload_service_server::{PayloadService, PayloadServi
 pub use generated::kraken::report_service_client::ReportServiceClient;
 #[cfg(feature = "grpc")]
 pub use generated::kraken::report_service_server::{ReportService, ReportServiceServer};
+#[cfg(feature = "grpc")]
+pub use generated::kraken::audit_service_client::AuditServiceClient;
+#[cfg(feature = "grpc")]
+pub use generated::kraken::audit_service_server::{AuditService, AuditServiceServer};
 
 // Re-export conversion helpers
 pub use convert::{

@@ -103,8 +103,15 @@ mod win {
                 )));
             }
 
-            // AdjustTokenPrivileges can succeed but set ERROR_NOT_ALL_ASSIGNED.
+            // AdjustTokenPrivileges returns success even when the privilege
+            // is not actually assigned.  ERROR_NOT_ALL_ASSIGNED (1300) means
+            // the token does not hold the privilege — treat this as failure.
             let last = GetLastError();
+            if last == 1300 {
+                return Err(KrakenError::Module(format!(
+                    "privilege not held: {name} (ERROR_NOT_ALL_ASSIGNED)"
+                )));
+            }
             if last != 0 {
                 warn!("enable_privilege({name}): AdjustTokenPrivileges last_error={last}");
             }

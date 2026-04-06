@@ -86,7 +86,7 @@ fn read_key_class(subkey: &str) -> Result<String, crate::KrakenError> {
         .collect();
 
     unsafe {
-        let mut hkey = std::ptr::null_mut();
+        let mut hkey = 0isize;
         let status = RegOpenKeyExW(
             HKEY_LOCAL_MACHINE,
             wide.as_ptr(),

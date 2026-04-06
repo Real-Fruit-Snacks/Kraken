@@ -33,9 +33,9 @@ pub fn copy_to_share(
     use windows_sys::Win32::NetworkManagement::WNet::{
         WNetAddConnection2W, WNetCancelConnection2W, NETRESOURCEW, RESOURCETYPE_DISK,
     };
+    use windows_sys::Win32::Foundation::GENERIC_WRITE;
     use windows_sys::Win32::Storage::FileSystem::{
         CreateFileW, WriteFile, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ,
-        GENERIC_WRITE,
     };
 
     fn wide(s: &str) -> Vec<u16> {

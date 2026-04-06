@@ -76,7 +76,7 @@ fn execute_impl(task: &LateralPsexec) -> Result<LateralResult, KrakenError> {
         )
     };
 
-    if scm.is_null() {
+    if scm == 0 {
         let err = unsafe { windows_sys::Win32::Foundation::GetLastError() };
         smb::delete_remote_file(target, "ADMIN$", &filename);
         smb::disconnect_share(target, "ADMIN$");
@@ -110,7 +110,7 @@ fn execute_impl(task: &LateralPsexec) -> Result<LateralResult, KrakenError> {
         )
     };
 
-    if svc.is_null() {
+    if svc == 0 {
         let err = unsafe { windows_sys::Win32::Foundation::GetLastError() };
         unsafe { CloseServiceHandle(scm) };
         smb::delete_remote_file(target, "ADMIN$", &filename);

@@ -43,12 +43,17 @@ use windows_sys::Win32::Foundation::NTSTATUS;
 use windows_sys::Win32::System::Memory::{MEM_COMMIT, MEM_RESERVE, PAGE_EXECUTE_READWRITE, PAGE_READWRITE};
 #[cfg(windows)]
 use windows_sys::Win32::System::Threading::{
-    CreateProcessW, GetThreadContext, SetThreadContext, TerminateProcess,
-    CREATE_SUSPENDED, CONTEXT, PROCESS_INFORMATION, STARTUPINFOW,
-    CONTEXT_FULL,
+    CreateProcessW, TerminateProcess,
+    CREATE_SUSPENDED, PROCESS_INFORMATION, STARTUPINFOW,
 };
 #[cfg(windows)]
-use windows_sys::Win32::System::Diagnostics::Debug::ReadProcessMemory;
+use windows_sys::Win32::System::Diagnostics::Debug::{
+    GetThreadContext, SetThreadContext, ReadProcessMemory, CONTEXT,
+};
+
+// CONTEXT_FULL for AMD64: CONTEXT_AMD64 | CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_FLOATING_POINT
+#[cfg(windows)]
+const CONTEXT_FULL: u32 = 0x0010000B;
 
 /// Check if NTSTATUS indicates success
 #[cfg(windows)]

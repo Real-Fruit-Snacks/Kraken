@@ -122,7 +122,7 @@ pub fn list_usb_devices() -> Result<Vec<UsbDeviceInfo>, KrakenError> {
             .chain(std::iter::once(0))
             .collect();
 
-        let mut hkey_usb: windows_sys::Win32::System::Registry::HKEY = std::ptr::null_mut();
+        let mut hkey_usb: windows_sys::Win32::System::Registry::HKEY = 0;
         let status = RegOpenKeyExW(
             HKEY_LOCAL_MACHINE,
             usb_key_wide.as_ptr(),
@@ -130,7 +130,7 @@ pub fn list_usb_devices() -> Result<Vec<UsbDeviceInfo>, KrakenError> {
             KEY_READ,
             &mut hkey_usb,
         );
-        if status != ERROR_SUCCESS as i32 {
+        if status != ERROR_SUCCESS {
             return Err(KrakenError::Module(format!(
                 "failed to open USB registry key: {}",
                 status
@@ -148,16 +148,16 @@ pub fn list_usb_devices() -> Result<Vec<UsbDeviceInfo>, KrakenError> {
                 vid_idx,
                 vid_name.as_mut_ptr(),
                 &mut vid_name_len,
-                std::ptr::null_mut(),
+                std::ptr::null(),
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
             );
 
-            if res == ERROR_NO_MORE_ITEMS as i32 {
+            if res == ERROR_NO_MORE_ITEMS {
                 break;
             }
-            if res != ERROR_SUCCESS as i32 {
+            if res != ERROR_SUCCESS {
                 vid_idx += 1;
                 continue;
             }
@@ -176,8 +176,7 @@ pub fn list_usb_devices() -> Result<Vec<UsbDeviceInfo>, KrakenError> {
                 .chain(std::iter::once(0))
                 .collect();
 
-            let mut hkey_vid: windows_sys::Win32::System::Registry::HKEY =
-                std::ptr::null_mut();
+            let mut hkey_vid: windows_sys::Win32::System::Registry::HKEY = 0;
             let open_res = RegOpenKeyExW(
                 HKEY_LOCAL_MACHINE,
                 subkey_path.as_ptr(),
@@ -186,7 +185,7 @@ pub fn list_usb_devices() -> Result<Vec<UsbDeviceInfo>, KrakenError> {
                 &mut hkey_vid,
             );
 
-            if open_res == ERROR_SUCCESS as i32 {
+            if open_res == ERROR_SUCCESS {
                 // Enumerate instance (serial number) subkeys
                 let mut inst_idx = 0u32;
                 loop {
@@ -198,16 +197,16 @@ pub fn list_usb_devices() -> Result<Vec<UsbDeviceInfo>, KrakenError> {
                         inst_idx,
                         inst_name.as_mut_ptr(),
                         &mut inst_name_len,
-                        std::ptr::null_mut(),
+                        std::ptr::null(),
                         std::ptr::null_mut(),
                         std::ptr::null_mut(),
                         std::ptr::null_mut(),
                     );
 
-                    if inst_res == ERROR_NO_MORE_ITEMS as i32 {
+                    if inst_res == ERROR_NO_MORE_ITEMS {
                         break;
                     }
-                    if inst_res != ERROR_SUCCESS as i32 {
+                    if inst_res != ERROR_SUCCESS {
                         inst_idx += 1;
                         continue;
                     }
@@ -222,8 +221,7 @@ pub fn list_usb_devices() -> Result<Vec<UsbDeviceInfo>, KrakenError> {
                             .chain(std::iter::once(0))
                             .collect();
 
-                    let mut hkey_inst: windows_sys::Win32::System::Registry::HKEY =
-                        std::ptr::null_mut();
+                    let mut hkey_inst: windows_sys::Win32::System::Registry::HKEY = 0;
                     let inst_open = RegOpenKeyExW(
                         HKEY_LOCAL_MACHINE,
                         inst_path.as_ptr(),
@@ -232,7 +230,7 @@ pub fn list_usb_devices() -> Result<Vec<UsbDeviceInfo>, KrakenError> {
                         &mut hkey_inst,
                     );
 
-                    let (description, manufacturer) = if inst_open == ERROR_SUCCESS as i32 {
+                    let (description, manufacturer) = if inst_open == ERROR_SUCCESS {
                         let desc = read_reg_sz(hkey_inst, "FriendlyName")
                             .or_else(|| read_reg_sz(hkey_inst, "DeviceDesc"))
                             .unwrap_or_default();
@@ -287,7 +285,7 @@ unsafe fn read_reg_sz(
     RegQueryValueExW(
         hkey,
         name_wide.as_ptr(),
-        std::ptr::null_mut(),
+        std::ptr::null(),
         &mut data_type,
         std::ptr::null_mut(),
         &mut buf_size,
@@ -301,13 +299,13 @@ unsafe fn read_reg_sz(
     let res = RegQueryValueExW(
         hkey,
         name_wide.as_ptr(),
-        std::ptr::null_mut(),
+        std::ptr::null(),
         &mut data_type,
         buf.as_mut_ptr() as *mut u8,
         &mut buf_size,
     );
 
-    if res != ERROR_SUCCESS as i32 {
+    if res != ERROR_SUCCESS {
         return None;
     }
 

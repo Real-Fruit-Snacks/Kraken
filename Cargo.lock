@@ -1517,14 +1517,30 @@ dependencies = [
  "lazy_static",
  "libc",
  "mesh",
+ "mod-ad",
+ "mod-audio",
  "mod-bof",
+ "mod-browser",
+ "mod-clipboard",
+ "mod-creds",
+ "mod-env",
  "mod-file",
  "mod-inject",
+ "mod-keylog",
+ "mod-lateral",
  "mod-mesh",
+ "mod-persist",
+ "mod-proc",
+ "mod-rdp",
+ "mod-reg",
+ "mod-scan",
  "mod-screenshot",
  "mod-shell",
  "mod-socks",
+ "mod-svc",
  "mod-token",
+ "mod-usb",
+ "mod-webcam",
  "proptest",
  "prost",
  "protocol",
@@ -2065,6 +2081,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mod-audio"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "prost",
+ "protocol",
+ "tracing",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "mod-bof"
 version = "0.1.0"
 dependencies = [
@@ -2074,6 +2101,19 @@ dependencies = [
  "protocol",
  "serial_test",
  "tempfile",
+ "tracing",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "mod-browser"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "common",
+ "prost",
+ "protocol",
+ "serde_json",
  "tracing",
  "windows-sys 0.52.0",
 ]
@@ -2236,6 +2276,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mod-rdp"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "prost",
+ "protocol",
+ "tracing",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "mod-reg"
 version = "0.1.0"
 dependencies = [
@@ -2313,6 +2364,28 @@ dependencies = [
  "prost",
  "protocol",
  "tokio",
+ "tracing",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "mod-usb"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "prost",
+ "protocol",
+ "tracing",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "mod-webcam"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "prost",
+ "protocol",
  "tracing",
  "windows-sys 0.52.0",
 ]

@@ -171,8 +171,9 @@ fn execute_impl(task: &LateralWinrm) -> Result<LateralResult, KrakenError> {
 
     // Create shell and execute command
     use windows_sys::Win32::Foundation::HANDLE;
+    use windows_sys::Win32::Foundation::CloseHandle;
     use windows_sys::Win32::System::Threading::{
-        CreateEventW, WaitForSingleObject, CloseHandle, INFINITE,
+        CreateEventW, WaitForSingleObject, INFINITE,
     };
 
     // WSMAN_SHELL_ASYNC structure for event-based synchronous wrapper

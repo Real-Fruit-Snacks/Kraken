@@ -96,8 +96,6 @@ fn build_wav_header(sample_rate: u32, channels: u16, bits_per_sample: u16, data_
 /// the placeholder loop with real IAudioClient / IAudioCaptureClient calls.
 #[cfg(windows)]
 pub fn capture_audio(duration_secs: u32) -> Result<Vec<u8>, KrakenError> {
-    use std::time::{Duration, Instant};
-
     tracing::info!("Starting WASAPI loopback audio capture for {}s", duration_secs);
 
     const SAMPLE_RATE: u32 = 44100;
@@ -121,25 +119,11 @@ pub fn capture_audio(duration_secs: u32) -> Result<Vec<u8>, KrakenError> {
     //   loop { capture_client.GetBuffer(...) → copy PCM → ReleaseBuffer }
     //   client.Stop()
     //
-    // Placeholder: fill with silence for the requested duration.
-    let start = Instant::now();
-    let target = Duration::from_secs(duration_secs as u64);
-    while start.elapsed() < target {
-        let filled = wav.len().saturating_sub(44);
-        let remaining = (data_size as usize).saturating_sub(filled);
-        if remaining == 0 {
-            break;
-        }
-        let chunk = remaining.min(bytes_per_sec as usize / 10);
-        wav.extend(std::iter::repeat(0u8).take(chunk));
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
-
-    // Pad to exact data_size if the loop finished early
-    let current_data = wav.len().saturating_sub(44);
-    if current_data < data_size as usize {
-        wav.extend(std::iter::repeat(0u8).take(data_size as usize - current_data));
-    }
+    // Placeholder: fill with silence immediately (non-blocking).
+    // The previous implementation slept for `duration_secs` seconds on the
+    // calling thread, causing the task to hang for the full recording duration.
+    // Fill the PCM data buffer with zeros in one shot instead.
+    wav.extend(std::iter::repeat(0u8).take(data_size as usize));
 
     tracing::info!("Audio capture complete: {} bytes (WAV)", wav.len());
     Ok(wav)

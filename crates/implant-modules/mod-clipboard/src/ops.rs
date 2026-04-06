@@ -10,14 +10,14 @@ pub fn get_clipboard_text() -> Result<String, KrakenError> {
         CloseClipboard, GetClipboardData, OpenClipboard,
     };
     use windows_sys::Win32::System::Memory::{GlobalLock, GlobalUnlock};
-    use windows_sys::Win32::UI::WindowsAndMessaging::CF_UNICODETEXT;
+    use windows_sys::Win32::System::Ole::CF_UNICODETEXT;
 
     unsafe {
         if OpenClipboard(0) == 0 {
             return Err(KrakenError::Module("OpenClipboard failed".into()));
         }
 
-        let h_data: HANDLE = GetClipboardData(CF_UNICODETEXT);
+        let h_data: HANDLE = GetClipboardData(CF_UNICODETEXT as u32);
         if h_data == 0 {
             CloseClipboard();
             return Ok(String::new());
@@ -51,14 +51,14 @@ pub fn set_clipboard_text(text: &str) -> Result<(), KrakenError> {
         CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
     };
     use windows_sys::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
-    use windows_sys::Win32::UI::WindowsAndMessaging::CF_UNICODETEXT;
+    use windows_sys::Win32::System::Ole::CF_UNICODETEXT;
 
     let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
     let byte_len = wide.len() * std::mem::size_of::<u16>();
 
     unsafe {
         let h_mem = GlobalAlloc(GMEM_MOVEABLE, byte_len);
-        if h_mem == 0 {
+        if h_mem.is_null() {
             return Err(KrakenError::Module("GlobalAlloc failed".into()));
         }
 
@@ -74,7 +74,7 @@ pub fn set_clipboard_text(text: &str) -> Result<(), KrakenError> {
         }
 
         EmptyClipboard();
-        SetClipboardData(CF_UNICODETEXT, h_mem as _);
+        SetClipboardData(CF_UNICODETEXT as u32, h_mem as _);
         CloseClipboard();
     }
 

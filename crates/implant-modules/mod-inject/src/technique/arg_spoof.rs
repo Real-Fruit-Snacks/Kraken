@@ -38,7 +38,7 @@ use windows_sys::Win32::System::Threading::{
     CreateProcessW, ResumeThread, CREATE_SUSPENDED, PROCESS_INFORMATION, STARTUPINFOW,
 };
 #[cfg(windows)]
-use windows_sys::Win32::System::Threading::{
+use windows_sys::Wdk::System::Threading::{
     NtQueryInformationProcess, PROCESSINFOCLASS,
 };
 

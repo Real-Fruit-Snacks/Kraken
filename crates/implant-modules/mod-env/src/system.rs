@@ -166,7 +166,7 @@ fn query_reg_string(hkey: isize, value_name: &str) -> String {
 
 #[cfg(windows)]
 fn read_computer_name() -> String {
-    use windows_sys::Win32::System::SystemInformation::GetComputerNameW;
+    use windows_sys::Win32::System::WindowsProgramming::GetComputerNameW;
 
     let mut buf = [0u16; 256];
     let mut size = buf.len() as u32;

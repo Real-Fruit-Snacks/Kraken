@@ -341,7 +341,7 @@ pub fn list_persistence() -> Result<PersistenceListOutput, KrakenError> {
                     .map(|b| u16::from_le_bytes([b[0], b[1]]))
                     .collect();
                 let end = words.iter().position(|&c| c == 0).unwrap_or(words.len());
-                String::from_utf16_lossy(&words[..end]).into_owned()
+                String::from_utf16_lossy(&words[..end]).to_string()
             } else {
                 String::new()
             };

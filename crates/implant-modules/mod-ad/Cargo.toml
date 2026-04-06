@@ -10,6 +10,8 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = []
 dynamic-entry = []
+# Enable the full Windows LDAP/Kerberos implementation (requires domain-joined host)
+full-ad = []
 
 [dependencies]
 common = { path = "../../common" }

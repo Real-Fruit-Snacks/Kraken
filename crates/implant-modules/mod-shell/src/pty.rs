@@ -333,7 +333,8 @@ impl PtySession {
         #[cfg(windows)]
         {
             use windows_sys::Win32::Foundation::HANDLE;
-            use windows_sys::Win32::Storage::FileSystem::{PeekNamedPipe, ReadFile};
+            use windows_sys::Win32::Storage::FileSystem::ReadFile;
+            use windows_sys::Win32::System::Pipes::PeekNamedPipe;
             unsafe {
                 // Peek to avoid blocking
                 let mut bytes_avail: u32 = 0;
@@ -464,7 +465,7 @@ impl PtySession {
                 // The PTY itself keeps the process alive; a closed output pipe
                 // indicates the session has ended. Use a best-effort approach:
                 // try peeking the output pipe — if it errors, the process ended.
-                use windows_sys::Win32::Storage::FileSystem::PeekNamedPipe;
+                use windows_sys::Win32::System::Pipes::PeekNamedPipe;
                 let mut bytes_avail: u32 = 0;
                 let ok = PeekNamedPipe(
                     self.output_read as HANDLE,

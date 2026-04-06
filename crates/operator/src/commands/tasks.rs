@@ -2,7 +2,6 @@
 
 use anyhow::Result;
 use chrono::{Local, TimeZone};
-
 use crate::cli::CliState;
 use crate::display::{print_error, print_info, print_success};
 use crate::theme::Theme;
@@ -255,6 +254,28 @@ pub async fn show(cli: &CliState, task_id: String) -> Result<()> {
 
             if !task.result_data.is_empty() {
                 println!("  Result size: {} bytes", task.result_data.len());
+
+                // Result data is JSON-encoded by the implant
+                println!("\nResult:");
+                match String::from_utf8(task.result_data.clone()) {
+                    Ok(json_str) => {
+                        // Try to pretty-print the JSON
+                        match serde_json::from_str::<serde_json::Value>(&json_str) {
+                            Ok(val) => {
+                                println!("{}", serde_json::to_string_pretty(&val).unwrap_or(json_str));
+                            }
+                            Err(_) => {
+                                // Valid UTF-8 but not JSON — print as-is
+                                println!("{}", json_str);
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // Binary data — hex dump
+                        let preview_len = task.result_data.len().min(200);
+                        println!("  (binary, {} bytes, hex): {}", task.result_data.len(), hex::encode(&task.result_data[..preview_len]));
+                    }
+                }
             }
         }
         Err(e) => {

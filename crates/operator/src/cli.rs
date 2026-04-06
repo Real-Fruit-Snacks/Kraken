@@ -28,8 +28,8 @@ pub struct CliState {
 
 impl CliState {
     /// Create new CLI state and connect to server
-    pub async fn new(server_addr: &str) -> Result<Self> {
-        let client = KrakenClient::connect(server_addr).await?;
+    pub async fn new(server_addr: &str, ca: Option<&str>, cert: Option<&str>, key: Option<&str>) -> Result<Self> {
+        let client = KrakenClient::connect(server_addr, ca, cert, key).await?;
         let history = History::new()?;
 
         Ok(Self {

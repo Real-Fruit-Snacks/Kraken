@@ -2,9 +2,13 @@
 
 use common::{KrakenError, PortScanOutput, OpenPortInfo};
 use protocol::PortScan;
-use std::net::{IpAddr, SocketAddr, TcpStream};
+use std::net::{IpAddr, SocketAddr, TcpStream, ToSocketAddrs};
+use std::sync::mpsc;
 use std::time::Duration;
 use tracing::debug;
+
+/// DNS resolution timeout
+const DNS_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Well-known service names for common ports
 fn service_name(port: u16) -> &'static str {
@@ -53,34 +57,81 @@ fn try_connect(addr: SocketAddr, timeout: Duration) -> Option<String> {
     }
 }
 
+/// Resolve a hostname to an IP address with a timeout.
+/// Spawns a thread to perform the blocking DNS lookup and waits at most
+/// `DNS_TIMEOUT` before returning an error.
+fn resolve_with_timeout(host: &str) -> Result<IpAddr, KrakenError> {
+    // Fast path: already an IP literal
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return Ok(ip);
+    }
+
+    let host_owned = format!("{}:0", host);
+    let (tx, rx) = mpsc::channel();
+
+    std::thread::spawn(move || {
+        let result = host_owned
+            .to_socket_addrs()
+            .ok()
+            .and_then(|mut it| it.next())
+            .map(|sa| sa.ip());
+        // Ignore send error — receiver may have timed out
+        let _ = tx.send(result);
+    });
+
+    match rx.recv_timeout(DNS_TIMEOUT) {
+        Ok(Some(ip)) => Ok(ip),
+        Ok(None) => Err(KrakenError::Internal(format!(
+            "failed to resolve target: {}",
+            host
+        ))),
+        Err(_) => Err(KrakenError::Internal(format!(
+            "DNS resolution timed out for target: {}",
+            host
+        ))),
+    }
+}
+
 pub fn scan(req: &PortScan) -> Result<PortScanOutput, KrakenError> {
     let timeout_ms = req.timeout_ms.unwrap_or(1000);
     let timeout = Duration::from_millis(timeout_ms as u64);
 
-    // Resolve target to an IP
+    // Resolve target to an IP with a bounded timeout
     let target = req.target.trim().to_string();
-    let addr: IpAddr = target
-        .parse()
-        .or_else(|_| {
-            use std::net::ToSocketAddrs;
-            format!("{}:0", target)
-                .to_socket_addrs()
-                .ok()
-                .and_then(|mut it| it.next())
-                .map(|sa| sa.ip())
-                .ok_or_else(|| std::net::AddrParseError::from(
-                    "0.0.0.0".parse::<IpAddr>().unwrap_err()
-                ))
-        })
-        .map_err(|_| KrakenError::Internal(format!("failed to resolve target: {}", target)))?;
+    let addr = resolve_with_timeout(&target)?;
 
     // Build port list
-    let mut ports: Vec<u16> = req.ports.iter().map(|&p| p as u16).collect();
+    let mut ports: Vec<u16> = Vec::new();
 
-    if ports.is_empty() {
-        let start = req.start_port.unwrap_or(1) as u16;
-        let end = req.end_port.unwrap_or(1024) as u16;
-        ports = (start..=end).collect();
+    if req.ports.is_empty() {
+        let start = req.start_port.unwrap_or(1);
+        let end = req.end_port.unwrap_or(1024);
+
+        // Validate range
+        if start == 0 || start > 65535 {
+            return Err(KrakenError::Internal(format!(
+                "start_port {} out of valid range 1-65535",
+                start
+            )));
+        }
+        if end == 0 || end > 65535 {
+            return Err(KrakenError::Internal(format!(
+                "end_port {} out of valid range 1-65535",
+                end
+            )));
+        }
+
+        ports = (start as u16..=end as u16).collect();
+    } else {
+        for &p in &req.ports {
+            if p == 0 || p > 65535 {
+                return Err(KrakenError::Internal(format!(
+                    "port {} out of valid range 1-65535",
+                    p
+                )));
+            }
+            ports.push(p as u16);
+        }
     }
 
     let _max_threads = req.threads.unwrap_or(64) as usize;

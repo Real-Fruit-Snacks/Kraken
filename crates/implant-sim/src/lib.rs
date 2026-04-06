@@ -357,11 +357,14 @@ impl SimulatedImplant {
 
     /// Calculate sleep duration with jitter
     fn jittered_interval(&self) -> Duration {
-        use rand::Rng;
-
         let base = self.checkin_interval as f64;
-        let jitter = self.jitter_percent as f64 / 100.0;
 
+        if self.jitter_percent == 0 {
+            return Duration::from_secs(base.max(1.0) as u64);
+        }
+
+        use rand::Rng;
+        let jitter = self.jitter_percent as f64 / 100.0;
         let mut rng = rand::thread_rng();
         let factor = 1.0 + rng.gen_range(-jitter..jitter);
         let seconds = (base * factor).max(1.0) as u64;

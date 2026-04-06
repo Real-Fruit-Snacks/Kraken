@@ -94,7 +94,7 @@ fn execute_impl(task: &LateralDcom) -> Result<LateralResult, KrakenError> {
     };
 
     let hr = unsafe {
-        CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED);
+        CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED as u32);
         CoCreateInstanceEx(
             &clsid,
             std::ptr::null_mut(),

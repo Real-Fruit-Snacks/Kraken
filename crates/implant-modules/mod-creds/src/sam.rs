@@ -38,7 +38,7 @@ pub fn dump(req: &CredDumpSam) -> Result<CredentialOutput, KrakenError> {
             .chain(std::iter::once(0))
             .collect();
 
-        let mut hkey = std::ptr::null_mut();
+        let mut hkey = 0isize;
         let result = RegOpenKeyExW(
             HKEY_LOCAL_MACHINE,
             sam_path.as_ptr(),

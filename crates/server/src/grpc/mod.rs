@@ -2,6 +2,7 @@
 
 use tonic::{Code, Status};
 
+pub mod audit_service;
 pub mod bof_service;
 pub mod inject_service;
 pub mod collab_service;
@@ -17,6 +18,7 @@ pub mod proxy_service;
 pub mod report_service;
 pub mod task_service;
 
+pub use audit_service::AuditServiceImpl;
 pub use bof_service::BOFServiceImpl;
 pub use inject_service::InjectServiceImpl;
 pub use collab_service::CollabServiceImpl;

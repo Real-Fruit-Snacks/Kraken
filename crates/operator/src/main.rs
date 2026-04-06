@@ -36,6 +36,18 @@ struct Args {
     /// Use Vi editing mode instead of Emacs
     #[arg(long)]
     vi: bool,
+
+    /// Path to CA certificate for server verification
+    #[arg(long)]
+    ca: Option<String>,
+
+    /// Path to operator client certificate
+    #[arg(long)]
+    cert: Option<String>,
+
+    /// Path to operator client key
+    #[arg(long)]
+    key: Option<String>,
 }
 
 #[tokio::main]
@@ -51,7 +63,7 @@ async fn main() -> Result<()> {
     // Connect to teamserver
     print_info(&format!("Connecting to teamserver at {}", args.server));
 
-    let cli = match CliState::new(&args.server).await {
+    let cli = match CliState::new(&args.server, args.ca.as_deref(), args.cert.as_deref(), args.key.as_deref()).await {
         Ok(c) => {
             print_success("Connected to teamserver");
             c

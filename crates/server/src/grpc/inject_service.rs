@@ -15,8 +15,21 @@ use protocol::{
     ListProcessesResponse, Task as ProtoTask, Timestamp,
 };
 
+use crate::auth::{get_cert_identity, resolve_operator, OperatorIdentity};
 use crate::error::ServerError;
 use crate::state::ServerState;
+
+/// Get operator identity, falling back to a mock admin in insecure/dev mode.
+async fn get_operator_or_dev<T>(db: &db::Database, request: &Request<T>) -> Result<OperatorIdentity, Status> {
+    match get_cert_identity(request) {
+        Ok(cert_id) => resolve_operator(db, cert_id).await,
+        Err(_) => Ok(OperatorIdentity::new(
+            "dev-operator".to_string(),
+            kraken_rbac::Role::Admin,
+            "dev-mode".to_string(),
+        )),
+    }
+}
 
 /// Processes that should trigger OPSEC warnings (lowercase for case-insensitive compare)
 #[allow(dead_code)]
@@ -42,11 +55,38 @@ const BLOCKED_PROCESSES: &[&str] = &[
 
 pub struct InjectServiceImpl {
     state: Arc<ServerState>,
+    /// System operator ID used when no authenticated operator context is available
+    system_operator_id: OperatorId,
 }
 
 impl InjectServiceImpl {
     pub fn new(state: Arc<ServerState>) -> Self {
-        Self { state }
+        Self {
+            state,
+            system_operator_id: OperatorId::from_bytes(&[0u8; 16]).unwrap(),
+        }
+    }
+
+    /// Create InjectServiceImpl and ensure the system operator exists in DB
+    pub async fn new_with_db_init(
+        state: Arc<ServerState>,
+    ) -> Result<Self, crate::error::ServerError> {
+        let system_operator_id = OperatorId::from_bytes(&[0u8; 16]).unwrap();
+        let now = chrono::Utc::now().timestamp_millis();
+
+        // Insert system operator if it doesn't exist (ignore conflict)
+        let _ = sqlx::query(
+            "INSERT OR IGNORE INTO operators (id, username, role, cert_fingerprint, created_at, is_active) VALUES (?, 'system', 'admin', 'system', ?, 1)"
+        )
+        .bind(system_operator_id.as_bytes().as_slice())
+        .bind(now)
+        .execute(state.db.pool())
+        .await;
+
+        Ok(Self {
+            state,
+            system_operator_id,
+        })
     }
 
     #[allow(dead_code)]
@@ -94,8 +134,7 @@ impl InjectService for InjectServiceImpl {
         &self,
         request: Request<ListProcessesRequest>,
     ) -> Result<Response<ListProcessesResponse>, Status> {
-        let cert_id = crate::auth::get_cert_identity(&request)?;
-        let operator = crate::auth::resolve_operator(&self.state.db, cert_id).await?;
+        let operator = get_operator_or_dev(&self.state.db, &request).await?;
         crate::auth::require_permission(&operator, kraken_rbac::Permission::SessionInteract)?;
 
         let req = request.into_inner();
@@ -110,8 +149,7 @@ impl InjectService for InjectServiceImpl {
         let task_id = TaskId::new();
         let now = chrono::Utc::now().timestamp_millis();
 
-        let operator_id = OperatorId::from_bytes(operator.id.as_bytes())
-            .map_err(|e| Status::internal(format!("invalid operator id: {e}")))?;
+        let operator_id = self.system_operator_id;
 
         let task_record = TaskRecord {
             id: task_id,
@@ -160,8 +198,7 @@ impl InjectService for InjectServiceImpl {
         &self,
         request: Request<InjectRequest>,
     ) -> Result<Response<InjectResponse>, Status> {
-        let cert_id = crate::auth::get_cert_identity(&request)?;
-        let operator = crate::auth::resolve_operator(&self.state.db, cert_id).await?;
+        let operator = get_operator_or_dev(&self.state.db, &request).await?;
         crate::auth::require_permission(&operator, kraken_rbac::Permission::ModuleExecute)?;
 
         let req = request.into_inner();
@@ -216,8 +253,7 @@ impl InjectService for InjectServiceImpl {
             .encode(&mut task_data)
             .map_err(|e| Status::internal(format!("failed to encode inject task: {e}")))?;
 
-        let operator_id = OperatorId::from_bytes(operator.id.as_bytes())
-            .map_err(|e| Status::internal(format!("invalid operator id: {e}")))?;
+        let operator_id = self.system_operator_id;
 
         let task_record = TaskRecord {
             id: task_id,

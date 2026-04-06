@@ -8,9 +8,13 @@ use protocol::{
     ModuleTask, Task, TaskResponse, TaskStatus, TaskSuccess, Timestamp,
 };
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::error::{ImplantError, ImplantResult};
 use crate::registry::{self, ModuleSource};
+
+/// Default task execution timeout (60 seconds)
+const TASK_TIMEOUT_SECS: u64 = 60;
 
 /// Implant runtime - handles task execution
 pub struct ImplantRuntime {
@@ -49,8 +53,41 @@ impl ImplantRuntime {
             }
             // Module management operations (load/unload/list)
             "module" => self.execute_module_operation(&task.task_data),
-            // All other tasks go through the module registry
-            task_type => self.execute_module_task(task_type, &task.task_data),
+            // All other tasks go through the module registry with a timeout
+            task_type => {
+                let task_type_owned = task_type.to_owned();
+                let task_data_owned = task.task_data.clone();
+                let timeout_result = tokio::time::timeout(
+                    Duration::from_secs(TASK_TIMEOUT_SECS),
+                    tokio::task::spawn_blocking(move || {
+                        let reg = registry::registry();
+                        let module = reg.get(&task_type_owned).ok_or_else(|| {
+                            ImplantError::Task(format!("unknown task type: {}", task_type_owned))
+                        })?;
+                        let task_id = TaskId::new();
+                        let result = module
+                            .handle(task_id, &task_data_owned)
+                            .map_err(|e| ImplantError::Task(e.to_string()))?;
+                        let result_bytes = serde_json::to_vec(&result).map_err(|e| {
+                            ImplantError::Task(format!("failed to serialize result: {}", e))
+                        })?;
+                        Ok::<Vec<u8>, ImplantError>(result_bytes)
+                    }),
+                )
+                .await;
+
+                match timeout_result {
+                    Ok(Ok(inner)) => inner,
+                    Ok(Err(join_err)) => Err(ImplantError::Task(format!(
+                        "task panicked: {}",
+                        join_err
+                    ))),
+                    Err(_) => Err(ImplantError::Task(format!(
+                        "task execution timed out after {}s",
+                        TASK_TIMEOUT_SECS
+                    ))),
+                }
+            }
         };
 
         match result {
@@ -75,26 +112,6 @@ impl ImplantRuntime {
                 completed_at: Some(Timestamp::now()),
             },
         }
-    }
-
-    /// Execute a task via the module registry
-    fn execute_module_task(&self, task_type: &str, task_data: &[u8]) -> ImplantResult<Vec<u8>> {
-        let reg = registry::registry();
-
-        let module = reg
-            .get(task_type)
-            .ok_or_else(|| ImplantError::Task(format!("unknown task type: {}", task_type)))?;
-
-        let task_id = TaskId::new();
-        let result = module
-            .handle(task_id, task_data)
-            .map_err(|e| ImplantError::Task(e.to_string()))?;
-
-        // Serialize the TaskResult to bytes
-        let result_bytes = serde_json::to_vec(&result)
-            .map_err(|e| ImplantError::Task(format!("failed to serialize result: {}", e)))?;
-
-        Ok(result_bytes)
     }
 
     /// Execute a module management operation (load/unload/list)

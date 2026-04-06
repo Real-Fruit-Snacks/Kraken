@@ -149,7 +149,7 @@ pub fn svc_list(task: &SvcList) -> Result<ServiceListOutput, KrakenError> {
     let running_only = task.running_only.unwrap_or(false);
 
     for i in 0..services_returned as usize {
-        let entry_ptr = buffer.as_ptr().add(i * entry_size) as *const ENUM_SERVICE_STATUS_PROCESSW;
+        let entry_ptr = unsafe { buffer.as_ptr().add(i * entry_size) } as *const ENUM_SERVICE_STATUS_PROCESSW;
         let entry = unsafe { &*entry_ptr };
 
         let name = unsafe { wide_ptr_to_string(entry.lpServiceName) };

@@ -27,5 +27,6 @@ windows-sys = { version = "0.52", features = [
     "Win32_System_Diagnostics_ToolHelp",
     "Win32_Security",
     "Win32_System_ProcessStatus",
+    "Wdk_System_Threading",
 ] }
 ntapi = "0.4"

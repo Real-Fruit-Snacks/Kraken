@@ -23,8 +23,24 @@ pub fn capture(monitor_index: u32) -> Result<CapturedFrame, KrakenError> {
         SRCCOPY,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
+    use windows_sys::Win32::System::StationsAndDesktops::{CloseDesktop, OpenInputDesktop};
 
     unsafe {
+        // Verify that the calling thread has access to an interactive desktop
+        // before issuing GDI calls. GetDC(0) / BitBlt succeed but capture a
+        // black frame (or silently produce garbage) when the process has no
+        // associated desktop — e.g. when running as a service in Session 0 or
+        // on a locked workstation where the current desktop is not the input
+        // desktop. OpenInputDesktop fails fast in those cases and lets us return
+        // a clean error instead of a silent black screenshot.
+        let input_desktop = OpenInputDesktop(0, 0, 0x0200 /* GENERIC_READ */);
+        if input_desktop == 0 {
+            return Err(KrakenError::Module(
+                "no accessible interactive desktop (non-interactive session or locked workstation)".into(),
+            ));
+        }
+        CloseDesktop(input_desktop);
+
         // GetDC(NULL) returns a DC for the entire virtual screen
         // In windows-sys 0.52, HWND/HDC/HBITMAP are isize (not raw pointers)
         let screen_dc = GetDC(0);
