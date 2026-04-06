@@ -166,11 +166,15 @@ pub struct BofOutput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScreenshotOutput {
-    /// Encoded image data (BMP or raw BGRA pixels)
-    pub data: Vec<u8>,
+    /// Base64-encoded image data (BMP, PNG, or JPEG).
+    ///
+    /// Stored as a base64 string so that serde_json serialisation produces a
+    /// compact JSON string (`"Qk0..."`) instead of a multi-megabyte array of
+    /// integers (`[66, 77, ...]`).
+    pub data: String,
     pub width: u32,
     pub height: u32,
-    /// "bmp" or "raw_bgra"
+    /// Image format: "bmp", "png", or "jpeg"
     pub format: String,
     pub monitor_index: u32,
     /// Unix timestamp in seconds

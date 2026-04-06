@@ -6,6 +6,7 @@
 //! Windows: implemented via GDI (GetDC / BitBlt / GetDIBits).
 //! Linux/macOS: returns a "not implemented" error (stub).
 
+use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use common::{KrakenError, Module, ModuleId, ScreenshotOutput, TaskId, TaskResult};
 use prost::Message;
 use protocol::ScreenshotTask;
@@ -64,7 +65,7 @@ impl Module for ScreenshotModule {
         };
 
         Ok(TaskResult::Screenshot(ScreenshotOutput {
-            data: bmp_data,
+            data: B64.encode(&bmp_data),
             width: frame.width,
             height: frame.height,
             format: "bmp".into(),
