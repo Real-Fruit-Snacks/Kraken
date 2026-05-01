@@ -6,8 +6,8 @@
   <line x1="0" y1="32" x2="800" y2="32" stroke="#bcc0cc" stroke-width="1"/>
   <text x="20" y="22" font-family="'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace" font-size="10" font-weight="700" fill="#8839ef" letter-spacing="2">RFS</text>
   <text x="60" y="22" font-family="'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace" font-size="10" font-weight="500" fill="#9ca0b0" letter-spacing="2">·  KRAKEN  ·  OPSEC-FIRST C2</text>
-  <circle cx="690" cy="18" r="3" fill="#df8e1d"/>
-  <text x="700" y="22" font-family="'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace" font-size="10" font-weight="500" fill="#6c6f85" letter-spacing="2">ALPHA · WIP</text>
+  <circle cx="676" cy="18" r="3" fill="#df8e1d"/>
+  <text x="780" y="22" text-anchor="end" font-family="'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace" font-size="10" font-weight="500" fill="#6c6f85" letter-spacing="2">ALPHA · WIP</text>
 
   <!-- Wordmark -->
   <text x="20" y="115" font-family="'Inter', 'SF Pro Display', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="92" font-weight="800" fill="#1e1e2e" letter-spacing="-4">KRAKEN<tspan fill="#d20f39">.</tspan></text>
@@ -18,15 +18,19 @@
   <line x1="400" y1="140" x2="400" y2="200" stroke="#bcc0cc" stroke-width="1"/>
   <line x1="600" y1="140" x2="600" y2="200" stroke="#bcc0cc" stroke-width="1"/>
 
-  <text x="20" y="158" font-family="'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace" font-size="9" font-weight="600" fill="#9ca0b0" letter-spacing="2">IMPLANT</text>
-  <text x="20" y="186" font-family="'Inter', 'SF Pro Display', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="22" font-weight="700" fill="#1e1e2e" letter-spacing="-1">~50<tspan fill="#d20f39" font-size="14"> KB</tspan></text>
+  <text x="20" y="158" font-family="'JetBrains Mono', 'Courier New', monospace" font-size="10" font-weight="600" fill="#9ca0b0" letter-spacing="1">IMPLANT</text>
+  <text x="20" y="175" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="700" fill="#d20f39" letter-spacing="0">~50 KB</text>
+  <text x="20" y="190" font-family="'JetBrains Mono', 'Courier New', monospace" font-size="8" fill="#9ca0b0" letter-spacing="0">MODULAR · STRIPPED · STATIC</text>
 
-  <text x="220" y="158" font-family="'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace" font-size="9" font-weight="600" fill="#9ca0b0" letter-spacing="2">XPORTS</text>
-  <text x="220" y="186" font-family="'Inter', 'SF Pro Display', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="22" font-weight="700" fill="#1e1e2e" letter-spacing="-1">4<tspan fill="#d20f39" font-size="14">×  HTTPS·TCP·SMB·DNS</tspan></text>
+  <text x="220" y="158" font-family="'JetBrains Mono', 'Courier New', monospace" font-size="10" font-weight="600" fill="#9ca0b0" letter-spacing="1">XPORTS</text>
+  <text x="220" y="175" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="700" fill="#d20f39" letter-spacing="0">4 CHANNELS</text>
+  <text x="220" y="190" font-family="'JetBrains Mono', 'Courier New', monospace" font-size="8" fill="#9ca0b0" letter-spacing="0">HTTPS · TCP · SMB · DNS</text>
 
-  <text x="420" y="158" font-family="'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace" font-size="9" font-weight="600" fill="#9ca0b0" letter-spacing="2">CRYPTO</text>
-  <text x="420" y="186" font-family="'Inter', 'SF Pro Display', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="22" font-weight="700" fill="#1e1e2e" letter-spacing="-1">X25519<tspan fill="#d20f39" font-size="14"> + GCM</tspan></text>
+  <text x="420" y="158" font-family="'JetBrains Mono', 'Courier New', monospace" font-size="10" font-weight="600" fill="#9ca0b0" letter-spacing="1">CRYPTO</text>
+  <text x="420" y="175" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="700" fill="#d20f39" letter-spacing="0">X25519 ECDH</text>
+  <text x="420" y="190" font-family="'JetBrains Mono', 'Courier New', monospace" font-size="8" fill="#9ca0b0" letter-spacing="0">AES-256-GCM · FORWARD SEC</text>
 
-  <text x="620" y="158" font-family="'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace" font-size="9" font-weight="600" fill="#9ca0b0" letter-spacing="2">STACK</text>
-  <text x="620" y="186" font-family="'Inter', 'SF Pro Display', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="22" font-weight="700" fill="#1e1e2e" letter-spacing="-1">RUST<tspan fill="#d20f39" font-size="14"> 1.81+</tspan></text>
+  <text x="620" y="158" font-family="'JetBrains Mono', 'Courier New', monospace" font-size="10" font-weight="600" fill="#9ca0b0" letter-spacing="1">STACK</text>
+  <text x="620" y="175" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="700" fill="#d20f39" letter-spacing="0">RUST 1.81+</text>
+  <text x="620" y="190" font-family="'JetBrains Mono', 'Courier New', monospace" font-size="8" fill="#9ca0b0" letter-spacing="0">MUSL · STATIC · NO-STD</text>
 </svg>
